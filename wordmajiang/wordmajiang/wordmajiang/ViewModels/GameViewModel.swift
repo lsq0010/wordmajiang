@@ -2,12 +2,12 @@ import SwiftUI
 import AVFoundation
 
 // MARK: - 词牌模型（用于词汇表展示）
-struct VocabWord: Identifiable {
+struct VocabWord: Identifiable, Hashable {
     let id = UUID()
     let word: String
     let seen: Int
     let correct: Int
-    let masteryClass: String  // "mastered" | "familiar" | "weak"
+    let masteryClass: String
 }
 
 /// 游戏 ViewModel：管理全部游戏状态和逻辑

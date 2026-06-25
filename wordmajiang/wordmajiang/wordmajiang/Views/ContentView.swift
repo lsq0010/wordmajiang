@@ -56,8 +56,7 @@ struct ContentView: View {
                                 .foregroundStyle(.tertiary.opacity(0.5))
                                 .padding(.vertical, 20)
                         } else {
-                            FlowLayout(spacing: 4) {
-                                ForEach(vm.sentence, id: \.self) { word in
+                            WrappingHStack(items: vm.sentence, spacing: 4) { word in
                                     WordTileView(
                                         word: word,
                                         glossary: vm.glossary[word.lowercased()],
@@ -66,7 +65,6 @@ struct ContentView: View {
                                         onSpeak: { vm.speakWord(word) }
                                     )
                                 }
-                            }
                         }
                     }
                     .padding(12)
@@ -85,16 +83,14 @@ struct ContentView: View {
                         Text("Your Hand")
                             .font(.system(size: 11))
                             .foregroundStyle(.tertiary)
-                        FlowLayout(spacing: 6) {
-                            ForEach(vm.hand, id: \.self) { word in
-                                WordTileView(
-                                    word: word,
-                                    glossary: vm.glossary[word.lowercased()],
-                                    isInSentence: false,
-                                    onTap: { vm.playTile(word) },
-                                    onSpeak: { vm.speakWord(word) }
-                                )
-                            }
+                        WrappingHStack(items: vm.hand, spacing: 6) { word in
+                            WordTileView(
+                                word: word,
+                                glossary: vm.glossary[word.lowercased()],
+                                isInSentence: false,
+                                onTap: { vm.playTile(word) },
+                                onSpeak: { vm.speakWord(word) }
+                            )
                         }
                     }
                     .padding(12)
@@ -122,20 +118,18 @@ struct ContentView: View {
                             Text("Learned Words (\(vm.vocabWords.count))")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.tertiary)
-                            FlowLayout(spacing: 4) {
-                                ForEach(vm.vocabWords) { vw in
-                                    VStack(spacing: 1) {
-                                        Text(vw.word)
-                                            .font(.system(size: 12, weight: .semibold))
-                                        Text("\(vw.correct)/\(vw.seen)")
-                                            .font(.system(size: 9))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(masteryColor(vw.masteryClass).opacity(0.15))
-                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            WrappingHStack(items: vm.vocabWords, spacing: 4) { vw in
+                                VStack(spacing: 1) {
+                                    Text(vw.word)
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text("\(vw.correct)/\(vw.seen)")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
                                 }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(masteryColor(vw.masteryClass).opacity(0.15))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
                             }
                         }
                         .padding(12)
@@ -196,50 +190,21 @@ struct StatLabel: View {
     }
 }
 
-/// 流式布局（词牌自动换行）
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 4
+/// 流式布局（词牌自动换行）- iOS 14+ 兼容版
+struct WrappingHStack<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
+    let items: Data
+    let spacing: CGFloat
+    @ViewBuilder let content: (Data.Element) -> Content
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let rows = computeRows(proposal: proposal, subviews: subviews)
-        var height: CGFloat = 0
-        for row in rows {
-            let rowHeight = row.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
-            height += rowHeight + spacing
-        }
-        return CGSize(width: proposal.width ?? 300, height: max(height - spacing, 0))
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let rows = computeRows(proposal: proposal, subviews: subviews)
-        var y = bounds.minY
-        for row in rows {
-            let rowHeight = row.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
-            var x = bounds.minX
-            for subview in row {
-                let size = subview.sizeThatFits(.unspecified)
-                subview.place(at: CGPoint(x: x, y: y), proposal: .unspecified)
-                x += size.width + spacing
-            }
-            y += rowHeight + spacing
-        }
-    }
-
-    private func computeRows(proposal: ProposedViewSize, subviews: Subviews) -> [[Subviews.Element]] {
-        let maxWidth = proposal.width ?? 300
-        var rows: [[Subviews.Element]] = [[]]
-        var currentRowWidth: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if !rows[rows.count - 1].isEmpty, currentRowWidth + size.width > maxWidth {
-                rows.append([subview])
-                currentRowWidth = size.width + spacing
-            } else {
-                rows[rows.count - 1].append(subview)
-                currentRowWidth += size.width + spacing
+    var body: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 50, maximum: 160), spacing: spacing)],
+            spacing: spacing
+        ) {
+            ForEach(Array(items), id: \.self) { item in
+                content(item)
             }
         }
-        return rows
     }
 }
 
