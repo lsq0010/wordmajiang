@@ -1,0 +1,93 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root{
+  --wood:#6b4423; --wood-d:#4a2f18;
+  --felt:#2e7d4f; --felt-d:#1f5c38;
+  --tile:#fdf6e3; --tile-d:#e8dcc0;
+  --ink:#2b2b2b; --red:#c0392b; --green:#27ae60;
+  --gold:#f1c40f;
+  --shadow:0 4px 8px rgba(0,0,0,.35);
+}
+body{
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  background:linear-gradient(135deg,#3a2418,#2a1810);
+  color:#fff; min-height:100vh; user-select:none; -webkit-user-select:none;
+}
+.wrap{ max-width:980px; margin:0 auto; padding:16px; }
+
+/* 顶栏 */
+.topbar{
+  display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+  background:linear-gradient(180deg,var(--wood),var(--wood-d));
+  border-radius:12px; padding:12px 18px; box-shadow:var(--shadow); margin-bottom:14px;
+}
+.topbar h1{ font-size:20px; letter-spacing:2px; }
+.topbar h1 span{ color:var(--gold); }
+.stats{ display:flex; gap:18px; font-size:15px; }
+.stat b{ color:var(--gold); font-size:18px; }
+
+/* 桌面 */
+.table{
+  background:radial-gradient(ellipse at center,var(--felt),var(--felt-d));
+  border:8px solid var(--wood-d); border-radius:18px; padding:18px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px;
+}
+.label{ text-align:center; font-size:13px; color:#cfe9d8; margin-bottom:8px; }
+
+/* 句子区 */
+.sentence-area{
+  background:rgba(0,0,0,.25); border-radius:12px; padding:16px; min-height:110px;
+  border:2px dashed rgba(255,255,255,.2);
+}
+.slots{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; justify-content:center; min-height:60px; }
+.s-tile{
+  background:linear-gradient(180deg,var(--tile),var(--tile-d));
+  color:var(--ink); border-radius:6px; padding:8px 14px; font-size:18px; font-weight:700;
+  box-shadow:var(--shadow); border:1px solid #b8a888; cursor:pointer; animation:pop .25s ease;
+}
+.s-tile:hover{ outline:2px solid var(--gold); }
+.insert-point{
+  width:18px; height:44px; border-radius:5px; border:2px dashed rgba(255,255,255,.35);
+  cursor:pointer; transition:all .15s; display:flex; align-items:center; justify-content:center;
+  color:rgba(255,255,255,.4); font-size:16px;
+}
+.insert-point:hover, .insert-point.active{
+  background:rgba(241,196,15,.3); border-color:var(--gold); color:var(--gold);
+}
+.empty-hint{ color:rgba(255,255,255,.4); font-size:14px; }
+@keyframes pop{ 0%{transform:scale(.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+
+/* 反馈 */
+.feedback{ min-height:24px; text-align:center; font-size:15px; }
+.feedback.ok{ color:#aef0c2; }
+.feedback.bad{ color:#ffb3b3; }
+.feedback .corr{ color:#ffe9a8; }
+
+/* 手牌 */
+.hand-area{ background:rgba(0,0,0,.18); border-radius:12px; padding:14px; }
+.hand{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; min-height:74px; }
+.p-tile{
+  min-width:50px; height:70px; padding:8px 14px;
+  background:linear-gradient(180deg,var(--tile),var(--tile-d));
+  color:var(--ink); border-radius:7px; border:1px solid #b8a888; box-shadow:var(--shadow);
+  font-size:18px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:transform .12s, box-shadow .12s; white-space:nowrap;
+}
+.p-tile:hover{ transform:translateY(-8px); box-shadow:0 10px 16px rgba(0,0,0,.45); }
+.p-tile.selected{ transform:translateY(-12px); outline:3px solid var(--gold); box-shadow:0 12px 18px rgba(0,0,0,.5); }
+
+/* 按钮 */
+.actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+.btn{
+  background:linear-gradient(180deg,var(--gold),#d4a017); color:#3a2418;
+  border:none; border-radius:8px; padding:10px 20px; font-size:15px; font-weight:700;
+  cursor:pointer; box-shadow:var(--shadow); transition:transform .1s;
+}
+.btn:hover{ transform:translateY(-2px); }
+.btn:active{ transform:translateY(0); }
+.btn.ghost{ background:rgba(255,255,255,.15); color:#fff; }
+.btn:disabled{ opacity:.4; cursor:not-allowed; transform:none; }
+
+/* 设置 */
+.settings{ display:flex; gap:14px; justify-content:center; align-items:center; font-size:14px; }
+.settings select{ padding:5px 10px; border-radius:6px; background:#fff; color:#333; border:1px solid #ccc; }
+.tip{ color:#ffe9a8; min-height:18px; }

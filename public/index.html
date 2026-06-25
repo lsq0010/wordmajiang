@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Mahjong · Build Sentences</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <h1>🀄 Word<span>Mahjong</span> · Build Sentences</h1>
+    <div class="stats">
+      <div class="stat">Score <b id="score">0</b></div>
+      <div class="stat">Hand <b id="handCount">0</b></div>
+      <div class="stat">Deck <b id="deckCount">0</b></div>
+    </div>
+  </header>
+
+  <main class="table">
+    <section class="sentence-area">
+      <div class="label">Sentence · tap a word card to auto-insert; tap a placed word to remove</div>
+      <div id="sentenceSlots" class="slots"></div>
+    </section>
+
+    <div id="feedback" class="feedback"></div>
+
+    <section class="hand-area">
+      <div class="label">Your Hand</div>
+      <div id="hand" class="hand"></div>
+    </section>
+
+    <div class="actions">
+      <button class="btn" id="clearBtn">↺ Clear</button>
+      <button class="btn" id="drawBtn">🀄 Draw</button>
+      <button class="btn ghost" id="restartBtn">🔄 New Game</button>
+    </div>
+
+    <div class="settings">
+      <label>Level:
+        <select id="levelSel">
+          <option value="basic">Basic</option>
+          <option value="advanced">Advanced</option>
+        </select>
+      </label>
+      <span class="tip" id="tip"></span>
+    </div>
+  </main>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
