@@ -70,6 +70,13 @@ app.post("/api/deal", async (req, res) => {
     wordStats: Object.fromEntries(
       Object.entries(userModel.wordFamiliarity)
         .sort((a, b) => b[1].seen - a[1].seen)
+        .filter(([, f]) => {
+          // 已掌握的词不发：见过≥5次 且 全对 且 平均反应<1.5秒
+          const mastered = f.seen >= 5 && f.correct === f.seen && f.wrong === 0
+            && (f.seen > 0 && f.totalTime / f.seen < 1500);
+          return !mastered;
+        })
+        .slice(0, 60) // 最多发60个，控制token消耗
         .map(([w, f]) => [
           w,
           {
@@ -81,6 +88,7 @@ app.post("/api/deal", async (req, res) => {
           },
         ])
     ),
+    masteredCount: Object.keys(userModel.wordFamiliarity).length,
   };
 
   try {
@@ -98,17 +106,17 @@ app.post("/api/deal", async (req, res) => {
             content:
               "你是一个英语教学AI。根据用户的学习数据，判断其水平、决定该出什么句子来最大化学习效果。" +
               "\n\n规则：\n" +
-              "- 分析每个词的正确率、平均反应时间、见过次数\n" +
-              "- 正确率高且反应快（<2000ms）的词=已掌握，少出现\n" +
+              "- wordStats 只包含尚未掌握的词汇。已掌握的词（见过≥5次+全对+反应快）不会列出，不要重复考。" +
+              "- masteredCount 是用户总学习词数，参考它判断整体进度。" +
               "- 正确率低或反应慢（>3000ms）的词=薄弱，多重复直到掌握\n" +
               "- 根据整体表现决定句子长度（4-12词）和难度等级（1-5）\n" +
-              "- 等级影响词汇复杂度：低等级用日常词，高等级用书面词\n" +
-              "- 不要连续两题用相同句型，要多样化\n\n" +
+              "- 低等级用日常短词，高等级用书面长词\n" +
+              "- 不要连续用相同句型\n\n" +
               "返回JSON（只返回JSON，不要markdown）：\n" +
               '{\n' +
               '  "sentence": "英文句子，单词间空格分隔，无标点",\n' +
-              '  "level": 新的难度等级1-5（可升可降可不变）,\n' +
-              '  "reason": "简要中文说明为何这样出题（10字以内）",\n' +
+              '  "level": 新的难度等级1-5,\n' +
+              '  "reason": "出题依据（10字内）",\n' +
               '  "glossary": {\n' +
               '    "word": {"cn": "中文翻译", "ipa": "IPA音标", "note": "简短中文语法注释"}\n' +
               '  }\n' +
