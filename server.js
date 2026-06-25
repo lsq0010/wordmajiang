@@ -104,8 +104,8 @@ app.get("/api/deal", async (req, res) => {
   const bank = charBank[userModel.level > 3 ? "advanced" : "basic"];
   const unmastered = getUnmasteredWords();
   const weakHint = unmastered.length > 0
-    ? ` You MUST build a sentence that contains AS MANY AS POSSIBLE of these words: ${unmastered.slice(0, 6).join(", ")}. Add other common words to make it grammatical.`
-    : " Generate a natural English sentence.";
+    ? ` 你必须构造一个句子，尽可能多地包含以下单词：${unmastered.slice(0, 6).join("，")}。再加入其他常用词使句子语法正确。`
+    : " 生成一个自然流畅的英文句子。";
 
   // 根据未达标词数量调整句子长度（让薄弱词都能装下）
   const baseCount = getWordCount(userModel.level);
@@ -124,13 +124,12 @@ app.get("/api/deal", async (req, res) => {
           {
             role: "system",
             content:
-              `Generate ONE natural English sentence, about ${targetCount} words.` + weakHint +
-              " For each word, provide: Chinese translation (cn), IPA pronunciation (ipa), " +
-              "and a brief grammar/usage note in Chinese (note). " +
-              "Return ONLY a JSON object, no markdown:\n" +
+              `生成一个自然流畅的英文句子，大约${targetCount}个单词。` + weakHint +
+              " 每个单词需要提供：中文翻译(cn)、IPA音标(ipa)、简短的中文语法/用法注释(note)。" +
+              " 只返回一个JSON对象，不要markdown格式，不要多余文字。格式如下：\n" +
               '{"sentence":"she opened the door slowly","glossary":{"she":{"cn":"她","ipa":"ʃiː","note":"代词主格"},"opened":{"cn":"打开","ipa":"ˈəʊpənd","note":"动词过去式"},"the":{"cn":"那个","ipa":"ðə","note":"定冠词"},"door":{"cn":"门","ipa":"dɔːr","note":"名词"},"slowly":{"cn":"慢慢地","ipa":"ˈsləʊli","note":"副词"}}}'
           },
-          { role: "user", content: "Generate" }
+          { role: "user", content: "开始生成" }
         ],
         temperature: 0.5,  // 低温确保执行指令
         response_format: { type: "json_object" }
