@@ -21,7 +21,11 @@ function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.rand
 
 async function loadPool(){
   setTip("Generating...");
-  const r = await fetch("/api/deal");
+  const r = await fetch("/api/deal", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ score: state.score })
+  });
   const d = await r.json();
   if(d.error){ setTip("Failed: " + d.error); return false; }
   state.bank = d.pool;
@@ -141,7 +145,8 @@ async function submitStats(){
           action: a.action || "play",
           timestamp: a.timestamp
         })),
-        totalTimeMs: totalTime
+        totalTimeMs: totalTime,
+        score: state.score
       })
     });
     fetchModel();

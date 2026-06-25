@@ -13,67 +13,14 @@ app.use(express.static(join(__dirname, "public")));
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
-// ========== 用户自适应模型（内存存储） ==========
+// ========== 用户数据（纯收集，不做判断） ==========
 let userModel = {
   level: 1,
-  recentResults: [],    // [{correct, total, avgTimeMs}]
-  wordFamiliarity: {},  // {word: {seen, correct, totalTime, lastSeen}}
   totalSentences: 0,
+  totalScore: 0,
+  recentResults: [],    // [{correct, total, avgTimeMs}]
+  wordFamiliarity: {},  // {word: {seen, correct, wrong, removed, totalTime}}
 };
-
-function getWordCount(level){
-  return 3 + level * 2; // level1=5, level2=7, ..., level5=13
-}
-
-// 评估并更新难度
-function evaluateLevel(){
-  const recent = userModel.recentResults.slice(-5);
-  if (recent.length < 3) return;
-  const avgAcc = recent.reduce((s,r) => s + r.correct/r.total, 0) / recent.length;
-  const avgTime = recent.reduce((s,r) => s + r.avgTimeMs, 0) / recent.length;
-  if (avgAcc > 0.9 && avgTime < 2000 && userModel.level < 5) {
-    userModel.level++;
-  } else if ((avgAcc < 0.55 || avgTime > 5000) && userModel.level > 1) {
-    userModel.level--;
-  }
-}
-
-// 计算词的熟悉度分数（0-1，越高越熟）
-function familiarityScore(f){
-  if (!f || f.seen === 0) return 0;
-  // 正确率权重
-  const acc = f.seen > 0 ? f.correct / f.seen : 0;
-  // 移除/错误惩罚
-  const penalty = f.seen > 0 ? (f.wrong * 1.5 + f.removed * 0.5) / f.seen : 0;
-  // 速度加分：平均反应<2秒为快
-  const avgTime = f.seen > 0 ? f.totalTime / f.seen : 10000;
-  const speedBonus = avgTime < 2000 ? 0.2 : avgTime < 4000 ? 0.1 : 0;
-  // 见过越多越稳定
-  const volumeBonus = Math.min(f.seen / 10, 0.2);
-  return Math.max(0, Math.min(1, acc - penalty + speedBonus + volumeBonus));
-}
-
-// 获取未达标词：熟悉度低于阈值，或见得少的词
-// 达标标准：见过≥3次 且 熟悉度≥0.7
-function getUnmasteredWords(threshold = 0.7){
-  return Object.entries(userModel.wordFamiliarity)
-    .filter(([,d]) => {
-      const fam = familiarityScore(d);
-      return fam < threshold || d.seen < 3;
-    })
-    .sort((a, b) => familiarityScore(a[1]) - familiarityScore(b[1]))
-    .slice(0, 8)
-    .map(e => e[0]);
-}
-
-// 获取薄弱词（兜底用）
-function getWeakWords(n = 3){
-  return Object.entries(userModel.wordFamiliarity)
-    .filter(([,d]) => d.seen >= 2)
-    .sort((a, b) => familiarityScore(a[1]) - familiarityScore(b[1]))
-    .slice(0, n)
-    .map(e => e[0]);
-}
 
 // ========== API ==========
 
@@ -83,40 +30,45 @@ app.get("/api/bank", (req, res) => {
   res.json({ chars: charBank[level] });
 });
 
-// 获取当前用户模型（前端显示进度用）
+// 获取当前用户数据
 app.get("/api/model", (req, res) => {
-  const unmastered = getUnmasteredWords();
-  const allWords = Object.entries(userModel.wordFamiliarity).map(([w, f]) => ({
-    word: w, seen: f.seen, correct: f.correct, wrong: f.wrong,
-    removed: f.removed, avgTime: f.seen > 0 ? Math.round(f.totalTime / f.seen) : 0,
-    familiarity: familiarityScore(f)
-  }));
-  res.json({
-    level: userModel.level,
-    totalSentences: userModel.totalSentences,
-    unmastered,
-    allWords: allWords.sort((a,b) => a.familiarity - b.familiarity).slice(0, 10)
-  });
+  res.json(userModel);
 });
 
-// 智能发牌：强制包含未达标词，让薄弱词反复出现直到掌握
-app.get("/api/deal", async (req, res) => {
-  const bank = charBank[userModel.level > 3 ? "advanced" : "basic"];
-  const unmastered = getUnmasteredWords();
-  const weakHint = unmastered.length > 0
-    ? ` 你必须构造一个句子，尽可能多地包含以下单词：${unmastered.slice(0, 6).join("，")}。再加入其他常用词使句子语法正确。`
-    : " 生成一个自然流畅的英文句子。";
+// 智能出题：把全部用户数据丢给 DeepSeek，让它决定一切
+app.post("/api/deal", async (req, res) => {
+  const { score } = req.body || {};
+  if (typeof score === "number") userModel.totalScore = score;
 
-  // 根据未达标词数量调整句子长度（让薄弱词都能装下）
-  const baseCount = getWordCount(userModel.level);
-  const targetCount = unmastered.length > 0 ? Math.max(baseCount, unmastered.slice(0, 5).length + 3) : baseCount;
+  // 把数据压缩成精简摘要发给 DeepSeek
+  const summary = {
+    currentLevel: userModel.level,
+    totalSentences: userModel.totalSentences,
+    totalScore: userModel.totalScore,
+    recentPerformance: userModel.recentResults.slice(-10),
+    wordStats: Object.fromEntries(
+      Object.entries(userModel.wordFamiliarity)
+        .sort((a, b) => b[1].seen - a[1].seen)
+        .slice(0, 30)
+        .map(([w, f]) => [
+          w,
+          {
+            seen: f.seen,
+            correct: f.correct,
+            wrong: f.wrong,
+            removed: f.removed || 0,
+            avgTimeMs: f.seen > 0 ? Math.round(f.totalTime / f.seen) : 0,
+          },
+        ])
+    ),
+  };
 
-  const buildSentence = async (retry = 0) => {
+  try {
     const resp = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
+        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
         model: "deepseek-chat",
@@ -124,37 +76,56 @@ app.get("/api/deal", async (req, res) => {
           {
             role: "system",
             content:
-              `生成一个自然流畅的英文句子，大约${targetCount}个单词。` + weakHint +
-              " 每个单词需要提供：中文翻译(cn)、IPA音标(ipa)、简短的中文语法/用法注释(note)。" +
-              " 只返回一个JSON对象，不要markdown格式，不要多余文字。格式如下：\n" +
-              '{"sentence":"she opened the door slowly","glossary":{"she":{"cn":"她","ipa":"ʃiː","note":"代词主格"},"opened":{"cn":"打开","ipa":"ˈəʊpənd","note":"动词过去式"},"the":{"cn":"那个","ipa":"ðə","note":"定冠词"},"door":{"cn":"门","ipa":"dɔːr","note":"名词"},"slowly":{"cn":"慢慢地","ipa":"ˈsləʊli","note":"副词"}}}'
+              "你是一个英语教学AI。根据用户的学习数据，判断其水平、决定该出什么句子来最大化学习效果。" +
+              "\n\n规则：\n" +
+              "- 分析每个词的正确率、平均反应时间、见过次数\n" +
+              "- 正确率高且反应快（<2000ms）的词=已掌握，少出现\n" +
+              "- 正确率低或反应慢（>3000ms）的词=薄弱，多重复直到掌握\n" +
+              "- 根据整体表现决定句子长度（4-12词）和难度等级（1-5）\n" +
+              "- 等级影响词汇复杂度：低等级用日常词，高等级用书面词\n" +
+              "- 不要连续两题用相同句型，要多样化\n\n" +
+              "返回JSON（只返回JSON，不要markdown）：\n" +
+              '{\n' +
+              '  "sentence": "英文句子，单词间空格分隔，无标点",\n' +
+              '  "level": 新的难度等级1-5（可升可降可不变）,\n' +
+              '  "reason": "简要中文说明为何这样出题（10字以内）",\n' +
+              '  "glossary": {\n' +
+              '    "word": {"cn": "中文翻译", "ipa": "IPA音标", "note": "简短中文语法注释"}\n' +
+              '  }\n' +
+              '}',
           },
-          { role: "user", content: "开始生成" }
+          {
+            role: "user",
+            content:
+              "用户学习数据如下，请分析并生成下一题：\n" +
+              JSON.stringify(summary, null, 2),
+          },
         ],
-        temperature: 0.5,  // 低温确保执行指令
-        response_format: { type: "json_object" }
-      })
+        temperature: 0.7,
+        response_format: { type: "json_object" },
+      }),
     });
+
     if (!resp.ok) {
       const t = await resp.text();
-      return { error: `DeepSeek error ${resp.status}: ${t}` };
+      return res.status(502).json({ error: `DeepSeek error ${resp.status}: ${t}` });
     }
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content || "{}";
     let plan;
-    try { plan = JSON.parse(content); } catch { return { error: "Parse failed" }; }
+    try { plan = JSON.parse(content); } catch {
+      return res.status(502).json({ error: "Parse failed" });
+    }
 
     const sentence = (plan.sentence || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
     const words = sentence.split(/\s+/).filter(w => w && w.length > 1);
-    if (words.length < 3) return { error: "Sentence too short" };
+    if (words.length < 3) {
+      return res.status(502).json({ error: "Sentence too short" });
+    }
 
-    // 检查弱点词覆盖率：如果不到60%且未重试过，再试一次
-    if (unmastered.length >= 3 && retry < 1) {
-      const included = unmastered.filter(w => words.some(sw => sw.toLowerCase() === w.toLowerCase()));
-      const rate = included.length / Math.min(unmastered.length, 6);
-      if (rate < 0.5) {
-        return await buildSentence(retry + 1);
-      }
+    // 同步 DeepSeek 判定的等级
+    if (Number.isFinite(plan.level) && plan.level >= 1 && plan.level <= 5) {
+      userModel.level = plan.level;
     }
 
     const glossary = plan.glossary || {};
@@ -163,70 +134,57 @@ app.get("/api/deal", async (req, res) => {
       if (!glossary[k]) glossary[k] = { cn: `[${w}]`, ipa: "", note: "" };
     });
 
-    return { words, glossary };
-  };
+    const pool = shuffle([...words]);
 
-  try {
-    const result = await buildSentence();
-    if (result.error) return res.status(502).json({ error: result.error });
-
-    const pool = shuffle([...result.words]);
     res.json({
-      pool, targetWords: result.words, glossary: result.glossary,
-      level: userModel.level
+      pool,
+      targetWords: words,
+      glossary,
+      level: userModel.level,
+      reason: plan.reason || "",
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// 接收答题统计数据，更新用户模型
+// 接收答题数据，纯收集不做判断
 app.post("/api/stats", (req, res) => {
-  const { words, totalTimeMs } = req.body; // words: [{word, correct, timeMs}]
+  const { words, totalTimeMs, score } = req.body;
   if (!Array.isArray(words) || words.length === 0) {
     return res.status(400).json({ error: "Invalid data" });
   }
 
   const correctCount = words.filter(w => w.correct).length;
-  const avgTime = totalTimeMs ? totalTimeMs / words.length : words.reduce((s,w)=>s+w.timeMs,0)/words.length;
+  const avgTime = totalTimeMs
+    ? totalTimeMs / words.length
+    : words.reduce((s, w) => s + (w.timeMs || 0), 0) / words.length;
 
-  // 更新每个词的数据（精确行为追踪）
+  // 更新每个词
   words.forEach(w => {
     const k = w.word.toLowerCase();
     if (!userModel.wordFamiliarity[k]) {
       userModel.wordFamiliarity[k] = {
-        seen: 0, correct: 0, wrong: 0, removed: 0,
-        totalTime: 0, lastSeen: Date.now(), history: []
+        seen: 0, correct: 0, wrong: 0, removed: 0, totalTime: 0,
       };
     }
     const f = userModel.wordFamiliarity[k];
     f.seen++;
     if (w.correct) f.correct++;
-    else if (w.action === "remove") f.removed++;
+    else if (w.action === "remove") f.removed = (f.removed || 0) + 1;
     else f.wrong++;
-
     if (w.timeMs > 0) f.totalTime += w.timeMs;
-    f.lastSeen = Date.now();
-    // 保留最近50条行为记录用于精细分析
-    f.history.push({
-      correct: w.correct,
-      action: w.action || "play",
-      timeMs: w.timeMs || 0,
-      timestamp: w.timestamp || Date.now()
-    });
-    if (f.history.length > 50) f.history.shift();
   });
 
+  if (typeof score === "number") userModel.totalScore = score;
   userModel.totalSentences++;
   userModel.recentResults.push({ correct: correctCount, total: words.length, avgTimeMs: avgTime });
   if (userModel.recentResults.length > 20) userModel.recentResults.shift();
-
-  evaluateLevel();
 
   res.json({ level: userModel.level, totalSentences: userModel.totalSentences });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`文字麻将已启动: http://localhost:${PORT}`);
+  console.log(`文字麻将已启动: http://localhost:3000`);
 });
