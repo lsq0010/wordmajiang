@@ -53,7 +53,20 @@ function familiarityScore(f){
   return Math.max(0, Math.min(1, acc - penalty + speedBonus + volumeBonus));
 }
 
-// 获取薄弱词（最不熟悉的前N个）
+// 获取未达标词：熟悉度低于阈值，或见得少的词
+// 达标标准：见过≥3次 且 熟悉度≥0.7
+function getUnmasteredWords(threshold = 0.7){
+  return Object.entries(userModel.wordFamiliarity)
+    .filter(([,d]) => {
+      const fam = familiarityScore(d);
+      return fam < threshold || d.seen < 3;
+    })
+    .sort((a, b) => familiarityScore(a[1]) - familiarityScore(b[1]))
+    .slice(0, 8)
+    .map(e => e[0]);
+}
+
+// 获取薄弱词（兜底用）
 function getWeakWords(n = 3){
   return Object.entries(userModel.wordFamiliarity)
     .filter(([,d]) => d.seen >= 2)
@@ -72,7 +85,7 @@ app.get("/api/bank", (req, res) => {
 
 // 获取当前用户模型（前端显示进度用）
 app.get("/api/model", (req, res) => {
-  const weak = getWeakWords(5);
+  const unmastered = getUnmasteredWords();
   const allWords = Object.entries(userModel.wordFamiliarity).map(([w, f]) => ({
     word: w, seen: f.seen, correct: f.correct, wrong: f.wrong,
     removed: f.removed, avgTime: f.seen > 0 ? Math.round(f.totalTime / f.seen) : 0,
@@ -81,22 +94,24 @@ app.get("/api/model", (req, res) => {
   res.json({
     level: userModel.level,
     totalSentences: userModel.totalSentences,
-    weakWords: weak,
+    unmastered,
     allWords: allWords.sort((a,b) => a.familiarity - b.familiarity).slice(0, 10)
   });
 });
 
-// 智能发牌：根据用户水平自适应句子长度和词汇
+// 智能发牌：强制包含未达标词，让薄弱词反复出现直到掌握
 app.get("/api/deal", async (req, res) => {
   const bank = charBank[userModel.level > 3 ? "advanced" : "basic"];
-  const wordCount = getWordCount(userModel.level);
-  const weakWords = getWeakWords(3);
-  let weakHint = "";
-  if (weakWords.length > 0) {
-    weakHint = ` Please include at least two of these words: ${weakWords.join(", ")}.`;
-  }
+  const unmastered = getUnmasteredWords();
+  const weakHint = unmastered.length > 0
+    ? ` You MUST build a sentence that contains AS MANY AS POSSIBLE of these words: ${unmastered.slice(0, 6).join(", ")}. Add other common words to make it grammatical.`
+    : " Generate a natural English sentence.";
 
-  try {
+  // 根据未达标词数量调整句子长度（让薄弱词都能装下）
+  const baseCount = getWordCount(userModel.level);
+  const targetCount = unmastered.length > 0 ? Math.max(baseCount, unmastered.slice(0, 5).length + 3) : baseCount;
+
+  const buildSentence = async (retry = 0) => {
     const resp = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
@@ -109,32 +124,38 @@ app.get("/api/deal", async (req, res) => {
           {
             role: "system",
             content:
-              `Generate ONE natural English sentence, exactly ${wordCount} words. ` +
-              "For each word, provide: Chinese translation (cn), " +
-              "a brief grammar/usage note in Chinese (note), and IPA pronunciation (ipa)." +
-              weakHint +
-              " Return ONLY a JSON object, no markdown:\n" +
-              '{"sentence":"the apple is red","glossary":{"the":{"cn":"那个","ipa":"ðə","note":"定冠词"},"apple":{"cn":"苹果","ipa":"ˈæpəl","note":"名词"},"is":{"cn":"是","ipa":"ɪz","note":"be动词"},"red":{"cn":"红色的","ipa":"rɛd","note":"形容词"}}}'
+              `Generate ONE natural English sentence, about ${targetCount} words.` + weakHint +
+              " For each word, provide: Chinese translation (cn), IPA pronunciation (ipa), " +
+              "and a brief grammar/usage note in Chinese (note). " +
+              "Return ONLY a JSON object, no markdown:\n" +
+              '{"sentence":"she opened the door slowly","glossary":{"she":{"cn":"她","ipa":"ʃiː","note":"代词主格"},"opened":{"cn":"打开","ipa":"ˈəʊpənd","note":"动词过去式"},"the":{"cn":"那个","ipa":"ðə","note":"定冠词"},"door":{"cn":"门","ipa":"dɔːr","note":"名词"},"slowly":{"cn":"慢慢地","ipa":"ˈsləʊli","note":"副词"}}}'
           },
           { role: "user", content: "Generate" }
         ],
-        temperature: 0.95,
+        temperature: 0.5,  // 低温确保执行指令
         response_format: { type: "json_object" }
       })
     });
     if (!resp.ok) {
       const t = await resp.text();
-      return res.status(502).json({ error: `DeepSeek error ${resp.status}: ${t}` });
+      return { error: `DeepSeek error ${resp.status}: ${t}` };
     }
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content || "{}";
     let plan;
-    try { plan = JSON.parse(content); } catch { return res.status(502).json({ error: "Parse failed" }); }
+    try { plan = JSON.parse(content); } catch { return { error: "Parse failed" }; }
 
     const sentence = (plan.sentence || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
     const words = sentence.split(/\s+/).filter(w => w && w.length > 1);
-    if (words.length < 4) {
-      return res.status(502).json({ error: "Sentence too short" });
+    if (words.length < 3) return { error: "Sentence too short" };
+
+    // 检查弱点词覆盖率：如果不到60%且未重试过，再试一次
+    if (unmastered.length >= 3 && retry < 1) {
+      const included = unmastered.filter(w => words.some(sw => sw.toLowerCase() === w.toLowerCase()));
+      const rate = included.length / Math.min(unmastered.length, 6);
+      if (rate < 0.5) {
+        return await buildSentence(retry + 1);
+      }
     }
 
     const glossary = plan.glossary || {};
@@ -143,10 +164,16 @@ app.get("/api/deal", async (req, res) => {
       if (!glossary[k]) glossary[k] = { cn: `[${w}]`, ipa: "", note: "" };
     });
 
-    const pool = shuffle([...words]);
+    return { words, glossary };
+  };
 
+  try {
+    const result = await buildSentence();
+    if (result.error) return res.status(502).json({ error: result.error });
+
+    const pool = shuffle([...result.words]);
     res.json({
-      pool, targetWords: words, glossary,
+      pool, targetWords: result.words, glossary: result.glossary,
       level: userModel.level
     });
   } catch (e) {
