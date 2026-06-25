@@ -34,6 +34,7 @@ struct WordTileView: View {
                     .foregroundStyle(.tertiary)
             }
         }
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(isInSentence ? Color.blue.opacity(0.15) : Color.white.opacity(0.08))

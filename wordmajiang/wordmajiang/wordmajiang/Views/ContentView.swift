@@ -198,7 +198,7 @@ struct WrappingHStack<Data: RandomAccessCollection, Content: View>: View where D
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 50, maximum: 160), spacing: spacing)],
+            columns: [GridItem(.adaptive(minimum: 80, maximum: 200), spacing: spacing)],
             spacing: spacing
         ) {
             ForEach(Array(items), id: \.self) { item in
