@@ -70,7 +70,6 @@ app.post("/api/deal", async (req, res) => {
     wordStats: Object.fromEntries(
       Object.entries(userModel.wordFamiliarity)
         .sort((a, b) => b[1].seen - a[1].seen)
-        .slice(0, 30)
         .map(([w, f]) => [
           w,
           {
