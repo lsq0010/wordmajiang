@@ -12,32 +12,29 @@ struct VocabWord: Identifiable {
 
 /// 游戏 ViewModel：管理全部游戏状态和逻辑
 @MainActor
-@Observable
-final class GameViewModel {
+final class GameViewModel: ObservableObject {
     // 牌堆 & 手牌
-    var bank: [String] = []
-    var hand: [String] = []
-    var sentence: [String] = []
-    var targetWords: [String] = []
-    var glossary: [String: GlossaryEntry] = [:]
+    @Published var bank: [String] = []
+    @Published var hand: [String] = []
+    @Published var sentence: [String] = []
+    @Published var targetWords: [String] = []
+    @Published var glossary: [String: GlossaryEntry] = [:]
 
     // 状态
-    var score = 0
-    var progress = 0
-    var level = 1
-    var deckCount = 0
-    var handCount = 0
-    var isBusy = false
-    var isLoading = true
+    @Published var score = 0
+    @Published var progress = 0
+    @Published var level = 1
+    @Published var isBusy = false
+    @Published var isLoading = true
 
     // 反馈
-    var feedbackMessage = ""
-    var feedbackType = ""  // "ok" | "bad" | ""
-    var tipText = ""
+    @Published var feedbackMessage = ""
+    @Published var feedbackType = ""
+    @Published var tipText = ""
 
     // 词汇表
-    var vocabWords: [VocabWord] = []
-    var showVocab = false
+    @Published var vocabWords: [VocabWord] = []
+    @Published var showVocab = false
 
     // 计时
     private var roundStart: Double = 0

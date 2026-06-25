@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var vm = GameViewModel()
+    @StateObject private var vm = GameViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
