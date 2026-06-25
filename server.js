@@ -19,9 +19,7 @@ app.get("/api/bank", (req, res) => {
   res.json({ chars: charBank[level] });
 });
 
-// 智能发牌：一次联网生成完整方案——
-// 目标句 + 每个词的插入顺序（第几步插、插到当前片段哪个位置）+ 干扰词
-// 客户端按方案表本地判定，点词零延迟。
+// 发牌：DeepSeek 生成目标句，拆词洗牌发牌，玩家按顺序拼
 app.get("/api/deal", async (req, res) => {
   const level = req.query.level === "advanced" ? "advanced" : "basic";
   const bank = charBank[level];
@@ -38,19 +36,12 @@ app.get("/api/deal", async (req, res) => {
           {
             role: "system",
             content:
-              "You generate a natural, grammatically correct, meaningful English sentence, 4 to 8 words. " +
-              "No punctuation, no numbers, no special characters. " +
-              "Then provide the correct insertion order: starting from an empty fragment, at each step, " +
-              "insert one word at the best position (0=front, len=end) so the intermediate result is always " +
-              "a reasonable English fragment building toward the full sentence. " +
-              "Only return JSON (no markdown, no extra text). Format:\n" +
-              '{"sentence":"full target sentence","steps":[{"char":"aword","position":0},...]}\n' +
-              "Make sure the sentence is commonly used, natural English."
+              "Generate ONE natural English sentence, 4 to 8 words. No punctuation, no numbers, no special chars. " +
+              "Only return the sentence as plain text, nothing else."
           },
           { role: "user", content: "Generate" }
         ],
-        temperature: 0.9,
-        response_format: { type: "json_object" }
+        temperature: 0.95
       })
     });
     if (!resp.ok) {
@@ -58,42 +49,16 @@ app.get("/api/deal", async (req, res) => {
       return res.status(502).json({ error: `DeepSeek error ${resp.status}: ${t}` });
     }
     const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content || "{}";
-    let plan;
-    try { plan = JSON.parse(content); } catch { return res.status(502).json({ error: "Failed to parse plan" }); }
-
-    const sentence = (plan.sentence || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
-    const words = sentence.split(/\s+/).filter(w => w);
-    const steps = Array.isArray(plan.steps) ? plan.steps : [];
-    if (words.length < 3 || steps.length < 3) {
+    const sentence = (data.choices?.[0]?.message?.content || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
+    const words = sentence.split(/\s+/).filter(w => w && w.length > 1);
+    if (words.length < 4) {
       return res.status(502).json({ error: "Generated sentence too short, retry" });
     }
 
-    // 解题表：每个词的插入步骤
-    const solution = steps.map((s, i) => ({
-      step: i,
-      char: String(s.char || "").replace(/[^a-zA-Z0-9']/g, "").toLowerCase(),
-      position: Number.isFinite(s.position) ? s.position : i
-    })).filter(s => s.char);
+    // 只发目标词，不混干扰
+    const pool = shuffle([...words]);
 
-    if (solution.length < 3) {
-      return res.status(502).json({ error: "Solution steps incomplete, retry" });
-    }
-
-    // 牌堆：目标词 + 干扰词（约 40%），洗牌
-    const targetWords = solution.map(s => s.char);
-    const noiseCount = Math.max(3, Math.ceil(targetWords.length * 0.4));
-    const noise = [];
-    for (let i = 0; i < noiseCount; i++) {
-      noise.push(bank[Math.floor(Math.random() * bank.length)]);
-    }
-    const pool = shuffle([...targetWords, ...noise]);
-
-    res.json({
-      pool,                  // 整个牌堆（目标词 + 干扰词）
-      target: words.join(" "), // 目标句
-      solution               // 解题步骤表
-    });
+    res.json({ pool, targetWords: words });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
