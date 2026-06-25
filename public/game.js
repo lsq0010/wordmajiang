@@ -1,6 +1,6 @@
 // Vocab Builder · 词牌带翻译注释，按顺序拼句
-const HAND_SIZE = 10;
-const HAND_MAX = 14;
+const HAND_SIZE = 12;
+const HAND_MAX = 16;
 const OK_SCORE = 10;
 const BAD_PENALTY = 5;
 

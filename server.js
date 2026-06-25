@@ -36,7 +36,8 @@ app.get("/api/deal", async (req, res) => {
           {
             role: "system",
         content:
-          "Generate ONE natural English sentence, 4 to 8 words. For each word, provide: Chinese translation (cn), " +
+          "Generate ONE natural English sentence, 6 to 10 words. Vary sentence length each time. " +
+          "For each word, provide: Chinese translation (cn), " +
           "a brief grammar/usage note in Chinese (note), and IPA pronunciation (ipa). " +
           "Return ONLY a JSON object, no markdown:\n" +
           '{"sentence":"the apple is red","glossary":{"the":{"cn":"那个","ipa":"ðə","note":"定冠词"},"apple":{"cn":"苹果","ipa":"ˈæpəl","note":"名词"},"is":{"cn":"是","ipa":"ɪz","note":"be动词"},"red":{"cn":"红色的","ipa":"rɛd","note":"形容词"}}}'
@@ -58,7 +59,7 @@ app.get("/api/deal", async (req, res) => {
 
     const sentence = (plan.sentence || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
     const words = sentence.split(/\s+/).filter(w => w && w.length > 1);
-    if (words.length < 4) {
+    if (words.length < 5) {
       return res.status(502).json({ error: "Sentence too short" });
     }
 
