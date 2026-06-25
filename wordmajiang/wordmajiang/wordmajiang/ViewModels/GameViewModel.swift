@@ -109,6 +109,7 @@ final class GameViewModel: ObservableObject {
 
     func playTile(_ word: String) {
         guard !isBusy, progress < targetWords.count else { return }
+        isBusy = true
 
         let now = CFAbsoluteTimeGetCurrent()
         let elapsed: Int
@@ -124,7 +125,7 @@ final class GameViewModel: ObservableObject {
 
         if word.lowercased() == expected.lowercased() {
             // 正确
-            hand.removeAll { $0 == word }
+            if let idx = hand.firstIndex(of: word) { hand.remove(at: idx) }
             sentence.append(word)
             speakWord(word)
             progress += 1
@@ -135,13 +136,17 @@ final class GameViewModel: ObservableObject {
                 // 本句完成
                 feedbackType = "ok"
                 feedbackMessage = "Complete! +\(okScore)"
+                isBusy = false
                 Task {
                     await submitStats()
                     sentence = []; progress = 0
                     actionLog = []
                     roundStart = CFAbsoluteTimeGetCurrent()
+                    isBusy = true
                     await newRound()
+                    isBusy = false
                 }
+                return
             } else {
                 feedbackType = "ok"
                 feedbackMessage = "+\(okScore)"
@@ -153,28 +158,33 @@ final class GameViewModel: ObservableObject {
             feedbackType = "bad"
             feedbackMessage = "Expected \"\(expected)\" -\(badPenalty)"
         }
+        isBusy = false
     }
 
     // MARK: - 语句区移除词回手牌
 
     func removeFromSentence(_ word: String) {
         guard !isBusy else { return }
-        guard let idx = sentence.firstIndex(of: word) else { return }
+        isBusy = true
+        guard let idx = sentence.firstIndex(of: word) else { isBusy = false; return }
         sentence.remove(at: idx)
         hand.append(word)
         progress = sentence.count
         actionLog.append(WordAction(word: word, correct: false, timeMs: 0, action: "remove", timestamp: CFAbsoluteTimeGetCurrent()))
         feedbackMessage = ""; feedbackType = ""
+        isBusy = false
     }
 
     // MARK: - 清空句子
 
     func clearSentence() {
         guard !isBusy else { return }
+        isBusy = true
         hand.append(contentsOf: sentence)
         sentence.removeAll()
         progress = 0
         feedbackMessage = ""; feedbackType = ""
+        isBusy = false
     }
 
     // MARK: - 摸牌
