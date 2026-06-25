@@ -86,3 +86,22 @@ body{
 .settings{ display: flex; gap: 12px; justify-content: center; align-items: center; font-size: 13px; color: #666; }
 .settings select{ padding: 3px 8px; border-radius: 3px; background: #333; color: #ccc; border: 1px solid #444; font-size: 12px; }
 .tip{ color: #555; min-height: 16px; font-size: 12px; }
+
+/* 词汇表 */
+.vocab-panel{
+  display: none;
+  background: #222; border: 1px solid #333; border-radius: 4px; padding: 14px;
+  max-height: 300px; overflow-y: auto;
+}
+.vocab-panel.show{ display: block; }
+.vocab-list{ display: flex; flex-wrap: wrap; gap: 4px; }
+.vocab-item{
+  display: flex; flex-direction: column; align-items: center;
+  font-size: 12px; padding: 5px 10px; border-radius: 3px;
+  min-width: 50px; border: 1px solid #333;
+}
+.vocab-item .vw{ font-size: 13px; font-weight: 600; color: #ddd; }
+.vocab-item .vf{ font-size: 10px; color: #888; }
+.vc-mastered{ background: #1a2a1a; border-color: #2a4a2a; }
+.vc-familiar{ background: #1a1a2a; border-color: #2a2a4a; }
+.vc-weak{ background: #2a1a1a; border-color: #4a2a2a; }

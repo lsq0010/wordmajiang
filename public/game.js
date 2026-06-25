@@ -9,6 +9,7 @@ const $score = el("score"), $handCount = el("handCount"), $deckCount = el("deckC
 const $slots = el("sentenceSlots"), $hand = el("hand"), $feedback = el("feedback"), $tip = el("tip");
 const $target = el("targetHint"), $level = el("levelBadge");
 const $clear = el("clearBtn"), $draw = el("drawBtn"), $restart = el("restartBtn");
+const $vocabBtn = el("vocabBtn"), $vocabPanel = el("vocabPanel"), $vocabList = el("vocabList");
 
 const state = {
   bank: [], hand: [], sentence: [], score: 0, busy: false,
@@ -40,7 +41,41 @@ async function fetchModel(){
     const r = await fetch("/api/model");
     const d = await r.json();
     if(d.level) $level.textContent = "Lv." + d.level;
+    renderVocab(d.wordFamiliarity);
   } catch(e){}
+}
+
+function renderVocab(wordData){
+  if(!wordData || Object.keys(wordData).length === 0){
+    $vocabList.innerHTML = "<span style='color:#555'>No words yet. Play a sentence to start learning.</span>";
+    return;
+  }
+  // 按熟悉度分类（用正确率估算）
+  const entries = Object.entries(wordData)
+    .map(([w,f]) => {
+      const acc = f.seen > 0 ? f.correct / f.seen : 0;
+      const avgT = f.seen > 0 ? f.totalTime / f.seen : 99999;
+      let cls = "vc-weak";
+      if(acc >= 0.9 && avgT < 2000) cls = "vc-mastered";
+      else if(acc >= 0.7) cls = "vc-familiar";
+      return { word: w, seen: f.seen, correct: f.correct || 0, cls };
+    })
+    .sort((a,b) => {
+      if(a.cls !== b.cls) return [b.cls,a.cls].indexOf(a.cls) - [b.cls,a.cls].indexOf(b.cls);
+      return b.seen - a.seen;
+    });
+
+  $vocabList.innerHTML = entries.map(e =>
+    `<div class="vocab-item ${e.cls}">
+      <span class="vw">${e.word}</span>
+      <span class="vf">${e.correct}/${e.seen}</span>
+    </div>`
+  ).join("");
+}
+
+function toggleVocab(){
+  $vocabPanel.classList.toggle("show");
+  fetchModel();
 }
 
 function deal(n){
@@ -225,5 +260,6 @@ function drawTile(){
 $clear.onclick = clearSentence;
 $draw.onclick = drawTile;
 $restart.onclick = () => { if(confirm("Restart?")) start(); };
+$vocabBtn.onclick = toggleVocab;
 
 start();
