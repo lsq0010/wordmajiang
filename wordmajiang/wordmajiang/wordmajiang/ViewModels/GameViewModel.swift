@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import Combine
 
 // MARK: - 词牌模型（用于词汇表展示）
 struct VocabWord: Identifiable, Hashable {
