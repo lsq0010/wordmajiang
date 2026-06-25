@@ -70,13 +70,6 @@ app.post("/api/deal", async (req, res) => {
     wordStats: Object.fromEntries(
       Object.entries(userModel.wordFamiliarity)
         .sort((a, b) => b[1].seen - a[1].seen)
-        .filter(([, f]) => {
-          // 已掌握的词不发：见过≥5次 且 全对 且 平均反应<1.5秒
-          const mastered = f.seen >= 5 && f.correct === f.seen && f.wrong === 0
-            && (f.seen > 0 && f.totalTime / f.seen < 1500);
-          return !mastered;
-        })
-        .slice(0, 60) // 最多发60个，控制token消耗
         .map(([w, f]) => [
           w,
           {
@@ -88,7 +81,6 @@ app.post("/api/deal", async (req, res) => {
           },
         ])
     ),
-    masteredCount: Object.keys(userModel.wordFamiliarity).length,
   };
 
   try {
@@ -104,10 +96,9 @@ app.post("/api/deal", async (req, res) => {
           {
             role: "system",
             content:
-              "你是一个英语教学AI。根据用户的学习数据，判断其水平、决定该出什么句子来最大化学习效果。" +
+              "你是一个英语教学AI。根据用户的全部学习数据，判断其水平、决定该出什么句子来最大化学习效果。" +
               "\n\n规则：\n" +
-              "- wordStats 只包含尚未掌握的词汇。已掌握的词（见过≥5次+全对+反应快）不会列出，不要重复考。" +
-              "- masteredCount 是用户总学习词数，参考它判断整体进度。" +
+              "- wordStats 包含所有学过的词及统计数据，已掌握的也偶尔穿插复习（间隔重复）。" +
               "- 正确率低或反应慢（>3000ms）的词=薄弱，多重复直到掌握\n" +
               "- 根据整体表现决定句子长度（4-12词）和难度等级（1-5）\n" +
               "- 低等级用日常短词，高等级用书面长词\n" +
