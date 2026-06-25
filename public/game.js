@@ -219,6 +219,7 @@ function playTile(idx){
   if(word.toLowerCase() === expected.toLowerCase()){
     state.hand.splice(idx, 1);
     state.sentence.push(word);
+    speakWord(word); // 选对自动朗读
     state.progress++;
     state.score += OK_SCORE;
     state.actionLog.push({ word, correct: true, timeMs: Math.round(elapsed), timestamp: now });
