@@ -10,7 +10,7 @@ dotenv.config({ override: true });
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json());
-app.use(express.static(join(__dirname, "public")));
+app.use(express.static(join(__dirname, "client", "dist")));
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
