@@ -51,9 +51,18 @@ function start(){
   render();
   loadPool().then(ok=>{
     if(!ok){ render(); return; }
-    deal(HAND_SIZE);
+    // Auto-place the first word so the player knows where to start
+    const first = state.solution[0];
+    // Ensure first word is in the pool, remove it
+    let fidx = state.bank.indexOf(first.char);
+    if(fidx === -1) fidx = state.bank.indexOf(first.char[0].toUpperCase() + first.char.slice(1));
+    if(fidx >= 0) state.bank.splice(fidx, 1);
+    // Deal 9 more (one less since first word is placed)
+    deal(HAND_SIZE - 1);
+    state.sentence.splice(first.position, 0, first.char);
+    state.progress = 1;
     render();
-    setTip("Tap a word card to auto-insert; tap a placed word to remove");
+    setTip("First word placed! Tap the next correct word to continue");
   });
 }
 
