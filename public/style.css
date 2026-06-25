@@ -45,7 +45,7 @@ body{
   border: 1px solid #3a4050; cursor: pointer; animation: pop .2s ease;
 }
 .s-tile:hover{ outline: 2px solid #505870; }
-.s-tile .t-word{ font-size: 15px; font-weight: 600; color: #bcc; }
+.s-tile .t-word{ font-size: 15px; font-weight: 600; color: #bcc; display: flex; align-items: center; gap: 4px; }
 .s-tile .t-ipa{ font-size: 10px; color: #667; font-style: italic; }
 .s-tile .t-cn{ font-size: 11px; color: #7a8; }
 .s-tile .t-note{ font-size: 10px; color: #555; }
@@ -68,7 +68,9 @@ body{
   cursor: pointer; transition: transform .1s; white-space: nowrap;
 }
 .p-tile:hover{ transform: translateY(-4px); border-color: #888; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
-.p-tile .t-word{ font-size: 16px; font-weight: 700; color: #ddd; }
+.p-tile .t-word{ font-size: 16px; font-weight: 700; color: #ddd; display: flex; align-items: center; gap: 4px; }
+.t-spk{ font-size: 10px; cursor: pointer; opacity: .5; line-height: 1; }
+.t-spk:hover{ opacity: 1; }
 .p-tile .t-ipa{ font-size: 11px; color: #889; font-style: italic; }
 .p-tile .t-cn{ font-size: 12px; color: #9ab; }
 .p-tile .t-note{ font-size: 10px; color: #666; }

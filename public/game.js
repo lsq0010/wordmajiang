@@ -104,6 +104,13 @@ function start(){
 function setTip(t){ $tip.textContent = t; }
 function setFeedback(cls, html){ $feedback.className = "feedback " + cls; $feedback.innerHTML = html; }
 
+function speakWord(word){
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(word);
+  u.lang = "en-US"; u.rate = 0.85;
+  speechSynthesis.speak(u);
+}
+
 function makeTile(word, handler){
   const g = state.glossary[word.toLowerCase()] || {};
   const ipa = g.ipa || "";
@@ -111,7 +118,7 @@ function makeTile(word, handler){
   const note = g.note || "";
   const div = document.createElement("div");
   div.className = "p-tile";
-  div.title = handler ? "Tap to place" : "Tap to remove";
+  div.title = handler ? "Tap to place | Click 🔊 to hear" : "Tap to remove | Click 🔊 to hear";
   const wordEl = document.createElement("span");
   wordEl.className = "t-word"; wordEl.textContent = word;
   const ipaEl = document.createElement("span");
@@ -120,6 +127,15 @@ function makeTile(word, handler){
   cnEl.className = "t-cn"; cnEl.textContent = cn;
   const noteEl = document.createElement("span");
   noteEl.className = "t-note"; noteEl.textContent = note;
+
+  // 喇叭按钮：点击读词，不触发牌的主操作
+  const spk = document.createElement("span");
+  spk.className = "t-spk";
+  spk.textContent = "🔊";
+  spk.title = "Click to hear pronunciation";
+  spk.onclick = (e) => { e.stopPropagation(); speakWord(word); };
+
+  wordEl.appendChild(spk);
   div.appendChild(wordEl);
   if(ipa) div.appendChild(ipaEl);
   if(cn) div.appendChild(cnEl);
