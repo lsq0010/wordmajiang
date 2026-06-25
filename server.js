@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import fs from "fs";
 import { charBank } from "./chars.js";
 
 dotenv.config({ override: true });
@@ -13,14 +14,34 @@ app.use(express.static(join(__dirname, "public")));
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
-// ========== 用户数据（纯收集，不做判断） ==========
-let userModel = {
+// ========== 用户数据持久化 ==========
+const DATA_FILE = join(__dirname, ".userdata.json");
+
+function loadUserData(){
+  try {
+    if(fs.existsSync(DATA_FILE)){
+      const raw = fs.readFileSync(DATA_FILE, "utf-8");
+      return JSON.parse(raw);
+    }
+  } catch(e){ console.error("Failed to load user data:", e.message); }
+  return null;
+}
+
+function saveUserData(){
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(userModel, null, 2), "utf-8");
+  } catch(e){ console.error("Failed to save user data:", e.message); }
+}
+
+let userModel = loadUserData() || {
   level: 1,
   totalSentences: 0,
   totalScore: 0,
-  recentResults: [],    // [{correct, total, avgTimeMs}]
-  wordFamiliarity: {},  // {word: {seen, correct, wrong, removed, totalTime}}
+  recentResults: [],
+  wordFamiliarity: {},
 };
+
+console.log(`用户数据已加载: ${userModel.totalSentences}句, 分数${userModel.totalScore}, Lv.${userModel.level}`);
 
 // ========== API ==========
 
@@ -126,6 +147,7 @@ app.post("/api/deal", async (req, res) => {
     // 同步 DeepSeek 判定的等级
     if (Number.isFinite(plan.level) && plan.level >= 1 && plan.level <= 5) {
       userModel.level = plan.level;
+      saveUserData();
     }
 
     const glossary = plan.glossary || {};
@@ -181,6 +203,7 @@ app.post("/api/stats", (req, res) => {
   userModel.recentResults.push({ correct: correctCount, total: words.length, avgTimeMs: avgTime });
   if (userModel.recentResults.length > 20) userModel.recentResults.shift();
 
+  saveUserData();
   res.json({ level: userModel.level, totalSentences: userModel.totalSentences });
 });
 
