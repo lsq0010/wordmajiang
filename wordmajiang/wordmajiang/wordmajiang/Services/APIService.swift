@@ -7,7 +7,7 @@ final class APIService {
     #if targetEnvironment(simulator)
     private let baseURL = "http://localhost:3000"
     #else
-    private let baseURL = "http://localhost:3000" // 真机需改为局域网 IP
+    private let baseURL = "http://172.17.38.29:3000"
     #endif
 
     private let decoder: JSONDecoder = {

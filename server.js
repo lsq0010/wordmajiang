@@ -206,6 +206,6 @@ app.post("/api/stats", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`文字麻将已启动: http://localhost:3000`);
 });
