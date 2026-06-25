@@ -38,15 +38,26 @@ function evaluateLevel(){
   }
 }
 
+// 计算词的熟悉度分数（0-1，越高越熟）
+function familiarityScore(f){
+  if (!f || f.seen === 0) return 0;
+  // 正确率权重
+  const acc = f.seen > 0 ? f.correct / f.seen : 0;
+  // 移除/错误惩罚
+  const penalty = f.seen > 0 ? (f.wrong * 1.5 + f.removed * 0.5) / f.seen : 0;
+  // 速度加分：平均反应<2秒为快
+  const avgTime = f.seen > 0 ? f.totalTime / f.seen : 10000;
+  const speedBonus = avgTime < 2000 ? 0.2 : avgTime < 4000 ? 0.1 : 0;
+  // 见过越多越稳定
+  const volumeBonus = Math.min(f.seen / 10, 0.2);
+  return Math.max(0, Math.min(1, acc - penalty + speedBonus + volumeBonus));
+}
+
 // 获取薄弱词（最不熟悉的前N个）
 function getWeakWords(n = 3){
   return Object.entries(userModel.wordFamiliarity)
     .filter(([,d]) => d.seen >= 2)
-    .sort((a, b) => {
-      const aScore = (a[1].correct/a[1].seen) + (1 - a[1].seen/20);
-      const bScore = (b[1].correct/b[1].seen) + (1 - b[1].seen/20);
-      return aScore - bScore;
-    })
+    .sort((a, b) => familiarityScore(a[1]) - familiarityScore(b[1]))
     .slice(0, n)
     .map(e => e[0]);
 }
@@ -61,10 +72,17 @@ app.get("/api/bank", (req, res) => {
 
 // 获取当前用户模型（前端显示进度用）
 app.get("/api/model", (req, res) => {
+  const weak = getWeakWords(5);
+  const allWords = Object.entries(userModel.wordFamiliarity).map(([w, f]) => ({
+    word: w, seen: f.seen, correct: f.correct, wrong: f.wrong,
+    removed: f.removed, avgTime: f.seen > 0 ? Math.round(f.totalTime / f.seen) : 0,
+    familiarity: familiarityScore(f)
+  }));
   res.json({
     level: userModel.level,
     totalSentences: userModel.totalSentences,
-    weakWords: getWeakWords(5)
+    weakWords: weak,
+    allWords: allWords.sort((a,b) => a.familiarity - b.familiarity).slice(0, 10)
   });
 });
 
@@ -146,17 +164,31 @@ app.post("/api/stats", (req, res) => {
   const correctCount = words.filter(w => w.correct).length;
   const avgTime = totalTimeMs ? totalTimeMs / words.length : words.reduce((s,w)=>s+w.timeMs,0)/words.length;
 
-  // 更新每个词的数据
+  // 更新每个词的数据（精确行为追踪）
   words.forEach(w => {
     const k = w.word.toLowerCase();
     if (!userModel.wordFamiliarity[k]) {
-      userModel.wordFamiliarity[k] = { seen: 0, correct: 0, totalTime: 0, lastSeen: Date.now() };
+      userModel.wordFamiliarity[k] = {
+        seen: 0, correct: 0, wrong: 0, removed: 0,
+        totalTime: 0, lastSeen: Date.now(), history: []
+      };
     }
     const f = userModel.wordFamiliarity[k];
     f.seen++;
     if (w.correct) f.correct++;
-    f.totalTime += w.timeMs;
+    else if (w.action === "remove") f.removed++;
+    else f.wrong++;
+
+    if (w.timeMs > 0) f.totalTime += w.timeMs;
     f.lastSeen = Date.now();
+    // 保留最近50条行为记录用于精细分析
+    f.history.push({
+      correct: w.correct,
+      action: w.action || "play",
+      timeMs: w.timeMs || 0,
+      timestamp: w.timestamp || Date.now()
+    });
+    if (f.history.length > 50) f.history.shift();
   });
 
   userModel.totalSentences++;

@@ -128,12 +128,21 @@ function render(){
 
 async function submitStats(){
   if(state.actionLog.length === 0) return;
-  const totalTime = state.actionLog.reduce((s,a) => s + a.timeMs, 0);
+  const totalTime = state.actionLog.reduce((s,a) => s + (a.timeMs||0), 0);
   try {
     await fetch("/api/stats", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ words: state.actionLog, totalTimeMs: totalTime })
+      body: JSON.stringify({
+        words: state.actionLog.map(a => ({
+          word: a.word,
+          correct: a.correct,
+          timeMs: a.timeMs || 0,
+          action: a.action || "play",
+          timestamp: a.timestamp
+        })),
+        totalTimeMs: totalTime
+      })
     });
     fetchModel();
   } catch(e){}
@@ -184,9 +193,12 @@ function playTile(idx){
 
 function removeFromSentence(pos){
   if(state.busy) return;
-  state.hand.push(state.sentence[pos]);
+  const word = state.sentence[pos];
+  state.hand.push(word);
   state.sentence.splice(pos, 1);
   state.progress = state.sentence.length;
+  // Record removal as hesitation (negative signal for that word)
+  state.actionLog.push({ word, correct: false, timeMs: 0, action: "remove", timestamp: performance.now() });
   setFeedback("", "");
   render();
 }
