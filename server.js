@@ -19,7 +19,7 @@ app.get("/api/bank", (req, res) => {
   res.json({ chars: charBank[level] });
 });
 
-// 发牌：DeepSeek 生成目标句，拆词洗牌发牌，玩家按顺序拼
+// 发牌：DeepSeek 生成目标句 + 每个词的翻译和注释
 app.get("/api/deal", async (req, res) => {
   const level = req.query.level === "advanced" ? "advanced" : "basic";
   const bank = charBank[level];
@@ -36,12 +36,14 @@ app.get("/api/deal", async (req, res) => {
           {
             role: "system",
             content:
-              "Generate ONE natural English sentence, 4 to 8 words. No punctuation, no numbers, no special chars. " +
-              "Only return the sentence as plain text, nothing else."
+              "Generate ONE natural English sentence, 4 to 8 words. For each word, provide Chinese translation (cn) " +
+              "and a brief grammar/usage note in Chinese (note). Return ONLY a JSON object, no markdown:\n" +
+              '{"sentence":"the apple is red","glossary":{"the":{"cn":"那个","note":"定冠词，指特定事物"},"apple":{"cn":"苹果","note":"名词"},"is":{"cn":"是","note":"be动词第三人称单数"},"red":{"cn":"红色的","note":"形容词"}}}'
           },
           { role: "user", content: "Generate" }
         ],
-        temperature: 0.95
+        temperature: 0.95,
+        response_format: { type: "json_object" }
       })
     });
     if (!resp.ok) {
@@ -49,16 +51,26 @@ app.get("/api/deal", async (req, res) => {
       return res.status(502).json({ error: `DeepSeek error ${resp.status}: ${t}` });
     }
     const data = await resp.json();
-    const sentence = (data.choices?.[0]?.message?.content || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
+    const content = data.choices?.[0]?.message?.content || "{}";
+    let plan;
+    try { plan = JSON.parse(content); } catch { return res.status(502).json({ error: "Parse failed" }); }
+
+    const sentence = (plan.sentence || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
     const words = sentence.split(/\s+/).filter(w => w && w.length > 1);
     if (words.length < 4) {
-      return res.status(502).json({ error: "Generated sentence too short, retry" });
+      return res.status(502).json({ error: "Sentence too short" });
     }
 
-    // 只发目标词，不混干扰
+    const glossary = plan.glossary || {};
+    // Ensure every word has a glossary entry
+    words.forEach(w => {
+      const k = w.toLowerCase();
+      if (!glossary[k]) glossary[k] = { cn: `[${w}]`, note: "" };
+    });
+
     const pool = shuffle([...words]);
 
-    res.json({ pool, targetWords: words });
+    res.json({ pool, targetWords: words, glossary });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

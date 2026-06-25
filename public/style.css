@@ -40,11 +40,14 @@ body{
 }
 .slots{ display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; min-height: 44px; }
 .s-tile{
-  background: #2a3040; color: #bcc; border-radius: 4px; padding: 5px 12px;
-  font-size: 15px; font-weight: 500; cursor: pointer; animation: pop .2s ease;
-  border: 1px solid #3a4050;
+  background: #2a3040; border-radius: 4px; padding: 5px 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: 1px solid #3a4050; cursor: pointer; animation: pop .2s ease;
 }
 .s-tile:hover{ outline: 2px solid #505870; }
+.s-tile .t-word{ font-size: 15px; font-weight: 600; color: #bcc; }
+.s-tile .t-cn{ font-size: 11px; color: #7a8; }
+.s-tile .t-note{ font-size: 10px; color: #555; }
 .empty-hint{ color: #444; font-size: 13px; }
 @keyframes pop{ 0%{transform:scale(.5);opacity:0} 100%{transform:scale(1);opacity:1} }
 
@@ -58,12 +61,15 @@ body{
 .hand-area{ background: #1e1e1e; border-radius: 4px; padding: 12px; border: 1px solid #2a2a2a; }
 .hand{ display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; min-height: 60px; }
 .p-tile{
-  min-width: 40px; height: 52px; padding: 6px 12px;
-  background: #333; color: #ddd; border-radius: 4px; border: 1px solid #444;
-  font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+  min-width: 60px; padding: 6px 12px;
+  background: #333; border-radius: 4px; border: 1px solid #444;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
   cursor: pointer; transition: transform .1s; white-space: nowrap;
 }
 .p-tile:hover{ transform: translateY(-4px); border-color: #888; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.p-tile .t-word{ font-size: 16px; font-weight: 700; color: #ddd; }
+.p-tile .t-cn{ font-size: 12px; color: #9ab; }
+.p-tile .t-note{ font-size: 10px; color: #666; }
 
 /* 按钮 */
 .actions{ display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }

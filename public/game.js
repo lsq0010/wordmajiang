@@ -1,4 +1,4 @@
-// Vocab Builder · 给定句子，按顺序拼词
+// Vocab Builder · 词牌带翻译注释，按顺序拼句
 const HAND_SIZE = 10;
 const HAND_MAX = 14;
 const OK_SCORE = 10;
@@ -13,7 +13,7 @@ const $level = el("levelSel");
 
 const state = {
   bank: [], hand: [], sentence: [], score: 0, busy: false,
-  targetWords: [], progress: 0
+  targetWords: [], glossary: {}, progress: 0
 };
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -26,6 +26,7 @@ async function loadPool(){
   if(d.error){ setTip("Failed: " + d.error); return false; }
   state.bank = d.pool;
   state.targetWords = d.targetWords;
+  state.glossary = d.glossary || {};
   return true;
 }
 
@@ -37,19 +38,40 @@ function deal(n){
 
 function start(){
   state.hand = []; state.sentence = []; state.score = 0; state.busy = false;
-  state.bank = []; state.targetWords = []; state.progress = 0;
+  state.bank = []; state.targetWords = []; state.glossary = {}; state.progress = 0;
   setFeedback("", "");
   render();
   loadPool().then(ok=>{
     if(!ok){ render(); return; }
     deal(HAND_SIZE);
     render();
-    setTip("Tap the next word in the sentence");
+    setTip("Tap the next word to build the sentence");
   });
 }
 
 function setTip(t){ $tip.textContent = t; }
 function setFeedback(cls, html){ $feedback.className = "feedback " + cls; $feedback.innerHTML = html; }
+
+// Build a tile element with word / translation / note
+function makeTile(word, isHand, idx, handler){
+  const g = state.glossary[word.toLowerCase()] || {};
+  const cn = g.cn || "";
+  const note = g.note || "";
+  const div = document.createElement("div");
+  div.className = "p-tile";
+  div.title = isHand ? "Tap to place" : "Tap to remove";
+  const wordEl = document.createElement("span");
+  wordEl.className = "t-word"; wordEl.textContent = word;
+  const cnEl = document.createElement("span");
+  cnEl.className = "t-cn"; cnEl.textContent = cn;
+  const noteEl = document.createElement("span");
+  noteEl.className = "t-note"; noteEl.textContent = note;
+  div.appendChild(wordEl);
+  if(cn) div.appendChild(cnEl);
+  if(note) div.appendChild(noteEl);
+  if(handler) div.onclick = handler;
+  return div;
+}
 
 function render(){
   $score.textContent = state.score;
@@ -75,24 +97,14 @@ function render(){
     $slots.appendChild(hint);
   } else {
     state.sentence.forEach((w, i) => {
-      const t = document.createElement("div");
-      t.className = "s-tile";
-      t.textContent = w;
-      t.title = "Tap to remove";
-      t.onclick = () => removeFromSentence(i);
-      $slots.appendChild(t);
+      $slots.appendChild(makeTile(w, false, i, () => removeFromSentence(i)));
     });
   }
 
   // Hand
   $hand.innerHTML = "";
   state.hand.forEach((w, idx) => {
-    const t = document.createElement("div");
-    t.className = "p-tile";
-    t.textContent = w;
-    t.title = "Tap to place";
-    t.onclick = () => playTile(idx);
-    $hand.appendChild(t);
+    $hand.appendChild(makeTile(w, true, idx, () => playTile(idx)));
   });
 
   $draw.disabled = state.bank.length === 0 || state.hand.length >= HAND_MAX || state.busy;
@@ -113,13 +125,12 @@ function playTile(idx){
 
     if(state.progress >= state.targetWords.length){
       setFeedback("ok", `✓ Complete! +${OK_SCORE} pts<br><span class="corr">${state.sentence.join(" ")}</span>`);
-      // Auto advance after delay
       setTimeout(() => {
         state.sentence = [];
         state.progress = 0;
         deal(state.targetWords.length);
         render();
-      }, 1500);
+      }, 1800);
     } else {
       setFeedback("ok", `✓ +${OK_SCORE}`);
     }
