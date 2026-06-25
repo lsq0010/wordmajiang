@@ -11,8 +11,7 @@ struct ContentView: View {
                     .font(.system(size: 18, weight: .semibold))
                 Text("Lv.\(vm.level)")
                     .font(.system(size: 11))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Color.green.opacity(0.2))
                     .clipShape(RoundedRectangle(cornerRadius: 4))
                 Spacer()
@@ -22,8 +21,7 @@ struct ContentView: View {
                     StatLabel(title: "Deck", value: "\(vm.bank.count)")
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16).padding(.vertical, 10)
 
             Divider()
 
@@ -32,44 +30,30 @@ struct ContentView: View {
                     // 目标句
                     if !vm.targetWords.isEmpty {
                         VStack(spacing: 4) {
-                            Text("Target")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-                            Text(targetDisplay)
-                                .font(.system(size: 14))
-                                .frame(maxWidth: .infinity, alignment: .center)
+                            Text("Target").font(.system(size: 11)).foregroundStyle(.tertiary)
+                            Text(targetDisplay).font(.system(size: 14))
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8).padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity)
                         .background(Color.white.opacity(0.04))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
 
                     // 句子区
-                    VStack(spacing: 4) {
-                        Text("Your Sentence")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                    sectionBox("Your Sentence") {
                         if vm.sentence.isEmpty {
                             Text("Tap a word below to place it")
                                 .font(.system(size: 13))
                                 .foregroundStyle(.tertiary.opacity(0.5))
                                 .padding(.vertical, 20)
                         } else {
-                            WrappingHStack(items: vm.sentence, spacing: 4) { word in
-                                    WordTileView(
-                                        word: word,
-                                        glossary: vm.glossary[word.lowercased()],
-                                        isInSentence: true,
-                                        onTap: { vm.removeFromSentence(word) },
-                                        onSpeak: { vm.speakWord(word) }
-                                    )
-                                }
+                            FlowCards(items: vm.sentence, spacing: 4) { word in
+                                WordTileView(word: word, glossary: vm.glossary[word.lowercased()], isInSentence: true,
+                                    onTap: { vm.removeFromSentence(word) },
+                                    onSpeak: { vm.speakWord(word) })
+                            }
                         }
                     }
-                    .padding(12)
-                    .background(Color.white.opacity(0.03))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
 
                     // 反馈
                     if !vm.feedbackMessage.isEmpty {
@@ -79,78 +63,50 @@ struct ContentView: View {
                     }
 
                     // 手牌
-                    VStack(spacing: 4) {
-                        Text("Your Hand")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
-                        WrappingHStack(items: vm.hand, spacing: 6) { word in
-                            WordTileView(
-                                word: word,
-                                glossary: vm.glossary[word.lowercased()],
-                                isInSentence: false,
+                    sectionBox("Your Hand") {
+                        FlowCards(items: vm.hand, spacing: 6) { word in
+                            WordTileView(word: word, glossary: vm.glossary[word.lowercased()], isInSentence: false,
                                 onTap: { vm.playTile(word) },
-                                onSpeak: { vm.speakWord(word) }
-                            )
+                                onSpeak: { vm.speakWord(word) })
                         }
-                    }
-                    .padding(12)
-                    .background(Color.white.opacity(0.03))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                    // 操作栏
-                    HStack(spacing: 8) {
-                        Button("Clear") { vm.clearSentence() }
-                            .buttonStyle(.bordered)
-                        Button("Draw") { vm.draw() }
-                            .buttonStyle(.bordered)
-                            .disabled(vm.bank.isEmpty || vm.hand.count >= 16)
-                        Button("New Game") { Task { await vm.start() } }
-                            .buttonStyle(.bordered)
-                        Button(vm.showVocab ? "Hide Words" : "Word List") {
-                            vm.showVocab.toggle()
-                        }
-                        .buttonStyle(.bordered)
                     }
 
                     // 词汇表
                     if vm.showVocab {
-                        VStack(spacing: 4) {
-                            Text("Learned Words (\(vm.vocabWords.count))")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-                            WrappingHStack(items: vm.vocabWords, spacing: 4) { vw in
+                        sectionBox("Learned Words (\(vm.vocabWords.count))") {
+                            FlowCards(items: vm.vocabWords, spacing: 4) { vw in
                                 VStack(spacing: 1) {
-                                    Text(vw.word)
-                                        .font(.system(size: 12, weight: .semibold))
-                                    Text("\(vw.correct)/\(vw.seen)")
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
+                                    Text(vw.word).font(.system(size: 12, weight: .semibold))
+                                    Text("\(vw.correct)/\(vw.seen)").font(.system(size: 9)).foregroundStyle(.secondary)
                                 }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
+                                .padding(.horizontal, 8).padding(.vertical, 4)
                                 .background(masteryColor(vw.masteryClass).opacity(0.15))
                                 .clipShape(RoundedRectangle(cornerRadius: 4))
                             }
                         }
-                        .padding(12)
-                        .background(Color.white.opacity(0.03))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
 
-                    // 提示
                     if !vm.tipText.isEmpty && vm.feedbackMessage.isEmpty {
-                        Text(vm.tipText)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.tertiary)
+                        Text(vm.tipText).font(.system(size: 12)).foregroundStyle(.tertiary)
                     }
                 }
                 .padding(12)
+                .padding(.bottom, 60) // 留空间给底部按钮
             }
+
+            // 底部固定操作栏
+            Divider()
+            HStack(spacing: 8) {
+                Button("Clear") { vm.clearSentence() }.buttonStyle(.bordered)
+                Button("Draw") { vm.draw() }.buttonStyle(.bordered)
+                    .disabled(vm.bank.isEmpty || vm.hand.count >= 16)
+                Button("New Game") { Task { await vm.start() } }.buttonStyle(.bordered)
+                Button(vm.showVocab ? "Hide" : "Words") { vm.showVocab.toggle() }.buttonStyle(.bordered)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .background(.ultraThinMaterial)
         }
-        .frame(minWidth: 360, minHeight: 500)
-        .task {
-            await vm.start()
-        }
+        .task { await vm.start() }
     }
 
     private var targetDisplay: AttributedString {
@@ -175,13 +131,23 @@ struct ContentView: View {
         default: return .red
         }
     }
+
+    @ViewBuilder
+    private func sectionBox<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 4) {
+            Text(title).font(.system(size: 11)).foregroundStyle(.tertiary)
+            content()
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
 }
 
-// MARK: - 小辅助组件
+// MARK: - 辅助组件
 
 struct StatLabel: View {
-    let title: String
-    let value: String
+    let title: String; let value: String
     var body: some View {
         VStack(spacing: 1) {
             Text(value).font(.system(size: 15, weight: .bold))
@@ -190,19 +156,21 @@ struct StatLabel: View {
     }
 }
 
-/// 流式布局（词牌自动换行）- iOS 14+ 兼容版
-struct WrappingHStack<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
+// MARK: - 瀑布流布局（iOS 14+）- LazyVGrid自适应列 + 左对齐
+
+struct FlowCards<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
     let items: Data
     let spacing: CGFloat
-    @ViewBuilder let content: (Data.Element) -> Content
+    @ViewBuilder let card: (Data.Element) -> Content
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 80, maximum: 200), spacing: spacing)],
+            columns: [GridItem(.adaptive(minimum: 90, maximum: 220), spacing: spacing, alignment: .leading)],
+            alignment: .leading,
             spacing: spacing
         ) {
             ForEach(Array(items), id: \.self) { item in
-                content(item)
+                card(item)
             }
         }
     }
