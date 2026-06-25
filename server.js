@@ -13,16 +13,71 @@ app.use(express.static(join(__dirname, "public")));
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
+// ========== 用户自适应模型（内存存储） ==========
+let userModel = {
+  level: 1,
+  recentResults: [],    // [{correct, total, avgTimeMs}]
+  wordFamiliarity: {},  // {word: {seen, correct, totalTime, lastSeen}}
+  totalSentences: 0,
+};
+
+function getWordCount(level){
+  return 3 + level * 2; // level1=5, level2=7, ..., level5=13
+}
+
+// 评估并更新难度
+function evaluateLevel(){
+  const recent = userModel.recentResults.slice(-5);
+  if (recent.length < 3) return;
+  const avgAcc = recent.reduce((s,r) => s + r.correct/r.total, 0) / recent.length;
+  const avgTime = recent.reduce((s,r) => s + r.avgTimeMs, 0) / recent.length;
+  if (avgAcc > 0.9 && avgTime < 2000 && userModel.level < 5) {
+    userModel.level++;
+  } else if ((avgAcc < 0.55 || avgTime > 5000) && userModel.level > 1) {
+    userModel.level--;
+  }
+}
+
+// 获取薄弱词（最不熟悉的前N个）
+function getWeakWords(n = 3){
+  return Object.entries(userModel.wordFamiliarity)
+    .filter(([,d]) => d.seen >= 2)
+    .sort((a, b) => {
+      const aScore = (a[1].correct/a[1].seen) + (1 - a[1].seen/20);
+      const bScore = (b[1].correct/b[1].seen) + (1 - b[1].seen/20);
+      return aScore - bScore;
+    })
+    .slice(0, n)
+    .map(e => e[0]);
+}
+
+// ========== API ==========
+
 // 提供字库（参考用）
 app.get("/api/bank", (req, res) => {
   const level = req.query.level === "advanced" ? "advanced" : "basic";
   res.json({ chars: charBank[level] });
 });
 
-// 发牌：DeepSeek 生成目标句 + 每个词的翻译和注释
+// 获取当前用户模型（前端显示进度用）
+app.get("/api/model", (req, res) => {
+  res.json({
+    level: userModel.level,
+    totalSentences: userModel.totalSentences,
+    weakWords: getWeakWords(5)
+  });
+});
+
+// 智能发牌：根据用户水平自适应句子长度和词汇
 app.get("/api/deal", async (req, res) => {
-  const level = req.query.level === "advanced" ? "advanced" : "basic";
-  const bank = charBank[level];
+  const bank = charBank[userModel.level > 3 ? "advanced" : "basic"];
+  const wordCount = getWordCount(userModel.level);
+  const weakWords = getWeakWords(3);
+  let weakHint = "";
+  if (weakWords.length > 0) {
+    weakHint = ` Please include at least two of these words: ${weakWords.join(", ")}.`;
+  }
+
   try {
     const resp = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
@@ -35,12 +90,13 @@ app.get("/api/deal", async (req, res) => {
         messages: [
           {
             role: "system",
-        content:
-          "Generate ONE natural English sentence, 6 to 10 words. Vary sentence length each time. " +
-          "For each word, provide: Chinese translation (cn), " +
-          "a brief grammar/usage note in Chinese (note), and IPA pronunciation (ipa). " +
-          "Return ONLY a JSON object, no markdown:\n" +
-          '{"sentence":"the apple is red","glossary":{"the":{"cn":"那个","ipa":"ðə","note":"定冠词"},"apple":{"cn":"苹果","ipa":"ˈæpəl","note":"名词"},"is":{"cn":"是","ipa":"ɪz","note":"be动词"},"red":{"cn":"红色的","ipa":"rɛd","note":"形容词"}}}'
+            content:
+              `Generate ONE natural English sentence, exactly ${wordCount} words. ` +
+              "For each word, provide: Chinese translation (cn), " +
+              "a brief grammar/usage note in Chinese (note), and IPA pronunciation (ipa)." +
+              weakHint +
+              " Return ONLY a JSON object, no markdown:\n" +
+              '{"sentence":"the apple is red","glossary":{"the":{"cn":"那个","ipa":"ðə","note":"定冠词"},"apple":{"cn":"苹果","ipa":"ˈæpəl","note":"名词"},"is":{"cn":"是","ipa":"ɪz","note":"be动词"},"red":{"cn":"红色的","ipa":"rɛd","note":"形容词"}}}'
           },
           { role: "user", content: "Generate" }
         ],
@@ -59,12 +115,11 @@ app.get("/api/deal", async (req, res) => {
 
     const sentence = (plan.sentence || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
     const words = sentence.split(/\s+/).filter(w => w && w.length > 1);
-    if (words.length < 5) {
+    if (words.length < 4) {
       return res.status(502).json({ error: "Sentence too short" });
     }
 
     const glossary = plan.glossary || {};
-    // Ensure every word has a glossary entry
     words.forEach(w => {
       const k = w.toLowerCase();
       if (!glossary[k]) glossary[k] = { cn: `[${w}]`, ipa: "", note: "" };
@@ -72,10 +127,45 @@ app.get("/api/deal", async (req, res) => {
 
     const pool = shuffle([...words]);
 
-    res.json({ pool, targetWords: words, glossary });
+    res.json({
+      pool, targetWords: words, glossary,
+      level: userModel.level
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// 接收答题统计数据，更新用户模型
+app.post("/api/stats", (req, res) => {
+  const { words, totalTimeMs } = req.body; // words: [{word, correct, timeMs}]
+  if (!Array.isArray(words) || words.length === 0) {
+    return res.status(400).json({ error: "Invalid data" });
+  }
+
+  const correctCount = words.filter(w => w.correct).length;
+  const avgTime = totalTimeMs ? totalTimeMs / words.length : words.reduce((s,w)=>s+w.timeMs,0)/words.length;
+
+  // 更新每个词的数据
+  words.forEach(w => {
+    const k = w.word.toLowerCase();
+    if (!userModel.wordFamiliarity[k]) {
+      userModel.wordFamiliarity[k] = { seen: 0, correct: 0, totalTime: 0, lastSeen: Date.now() };
+    }
+    const f = userModel.wordFamiliarity[k];
+    f.seen++;
+    if (w.correct) f.correct++;
+    f.totalTime += w.timeMs;
+    f.lastSeen = Date.now();
+  });
+
+  userModel.totalSentences++;
+  userModel.recentResults.push({ correct: correctCount, total: words.length, avgTimeMs: avgTime });
+  if (userModel.recentResults.length > 20) userModel.recentResults.shift();
+
+  evaluateLevel();
+
+  res.json({ level: userModel.level, totalSentences: userModel.totalSentences });
 });
 
 const PORT = process.env.PORT || 3000;

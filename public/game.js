@@ -1,4 +1,4 @@
-// Vocab Builder · 词牌带翻译注释，按顺序拼句
+// Vocab Builder · 自适应难度：计时 + 轨迹追踪 + 错词重点练
 const HAND_SIZE = 12;
 const HAND_MAX = 16;
 const OK_SCORE = 10;
@@ -7,27 +7,36 @@ const BAD_PENALTY = 5;
 const el = (id) => document.getElementById(id);
 const $score = el("score"), $handCount = el("handCount"), $deckCount = el("deckCount");
 const $slots = el("sentenceSlots"), $hand = el("hand"), $feedback = el("feedback"), $tip = el("tip");
-const $target = el("targetHint");
+const $target = el("targetHint"), $level = el("levelBadge");
 const $clear = el("clearBtn"), $draw = el("drawBtn"), $restart = el("restartBtn");
-const $level = el("levelSel");
 
 const state = {
   bank: [], hand: [], sentence: [], score: 0, busy: false,
-  targetWords: [], glossary: {}, progress: 0
+  targetWords: [], glossary: {}, progress: 0,
+  roundStart: 0,        // 当前句子开始时间
+  actionLog: [],         // [{word, correct, timeMs}]
 };
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
 async function loadPool(){
-  const level = $level.value;
   setTip("Generating...");
-  const r = await fetch(`/api/deal?level=${level}`);
+  const r = await fetch("/api/deal");
   const d = await r.json();
   if(d.error){ setTip("Failed: " + d.error); return false; }
   state.bank = d.pool;
   state.targetWords = d.targetWords;
   state.glossary = d.glossary || {};
+  if(d.level) $level.textContent = "Lv." + d.level;
   return true;
+}
+
+async function fetchModel(){
+  try {
+    const r = await fetch("/api/model");
+    const d = await r.json();
+    if(d.level) $level.textContent = "Lv." + d.level;
+  } catch(e){}
 }
 
 function deal(n){
@@ -39,11 +48,15 @@ function deal(n){
 function start(){
   state.hand = []; state.sentence = []; state.score = 0; state.busy = false;
   state.bank = []; state.targetWords = []; state.glossary = {}; state.progress = 0;
+  state.roundStart = 0; state.actionLog = [];
   setFeedback("", "");
   render();
+  fetchModel();
   loadPool().then(ok=>{
     if(!ok){ render(); return; }
     deal(HAND_SIZE);
+    state.roundStart = performance.now();
+    state.actionLog = [];
     render();
     setTip("Tap the next word to build the sentence");
   });
@@ -52,15 +65,14 @@ function start(){
 function setTip(t){ $tip.textContent = t; }
 function setFeedback(cls, html){ $feedback.className = "feedback " + cls; $feedback.innerHTML = html; }
 
-// Build a tile: word / IPA / translation / note
-function makeTile(word, isHand, idx, handler){
+function makeTile(word, handler){
   const g = state.glossary[word.toLowerCase()] || {};
   const ipa = g.ipa || "";
   const cn = g.cn || "";
   const note = g.note || "";
   const div = document.createElement("div");
   div.className = "p-tile";
-  div.title = isHand ? "Tap to place" : "Tap to remove";
+  div.title = handler ? "Tap to place" : "Tap to remove";
   const wordEl = document.createElement("span");
   wordEl.className = "t-word"; wordEl.textContent = word;
   const ipaEl = document.createElement("span");
@@ -101,22 +113,40 @@ function render(){
     $slots.appendChild(hint);
   } else {
     state.sentence.forEach((w, i) => {
-      $slots.appendChild(makeTile(w, false, i, () => removeFromSentence(i)));
+      $slots.appendChild(makeTile(w, () => removeFromSentence(i)));
     });
   }
 
   // Hand
   $hand.innerHTML = "";
   state.hand.forEach((w, idx) => {
-    $hand.appendChild(makeTile(w, true, idx, () => playTile(idx)));
+    $hand.appendChild(makeTile(w, () => playTile(idx)));
   });
 
   $draw.disabled = state.bank.length === 0 || state.hand.length >= HAND_MAX || state.busy;
 }
 
+async function submitStats(){
+  if(state.actionLog.length === 0) return;
+  const totalTime = state.actionLog.reduce((s,a) => s + a.timeMs, 0);
+  try {
+    await fetch("/api/stats", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ words: state.actionLog, totalTimeMs: totalTime })
+    });
+    fetchModel();
+  } catch(e){}
+}
+
 function playTile(idx){
   if(state.busy) return;
   if(state.progress >= state.targetWords.length) return;
+
+  const now = performance.now();
+  const elapsed = state.actionLog.length > 0
+    ? now - state.actionLog[state.actionLog.length-1].timestamp
+    : (state.roundStart > 0 ? now - state.roundStart : 1000);
 
   const word = state.hand[idx];
   const expected = state.targetWords[state.progress];
@@ -126,12 +156,16 @@ function playTile(idx){
     state.sentence.push(word);
     state.progress++;
     state.score += OK_SCORE;
+    state.actionLog.push({ word, correct: true, timeMs: Math.round(elapsed), timestamp: now });
 
     if(state.progress >= state.targetWords.length){
+      submitStats();
       setFeedback("ok", `✓ Complete! +${OK_SCORE} pts<br><span class="corr">${state.sentence.join(" ")}</span>`);
       setTimeout(async () => {
         state.sentence = [];
         state.progress = 0;
+        state.roundStart = performance.now();
+        state.actionLog = [];
         const ok = await loadPool();
         if(!ok){ render(); return; }
         deal(HAND_SIZE);
@@ -142,6 +176,7 @@ function playTile(idx){
     }
   } else {
     state.score -= BAD_PENALTY;
+    state.actionLog.push({ word, correct: false, timeMs: Math.round(elapsed), timestamp: now });
     setFeedback("bad", `✗ Expected "${expected}", -${BAD_PENALTY}`);
   }
   render();
@@ -173,6 +208,5 @@ function drawTile(){
 $clear.onclick = clearSentence;
 $draw.onclick = drawTile;
 $restart.onclick = () => { if(confirm("Restart?")) start(); };
-$level.onchange = () => { if(confirm("Changing difficulty restarts. Confirm?")) start(); };
 
 start();
