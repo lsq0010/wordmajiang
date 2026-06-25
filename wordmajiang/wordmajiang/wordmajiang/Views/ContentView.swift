@@ -156,24 +156,71 @@ struct StatLabel: View {
     }
 }
 
-// MARK: - 瀑布流布局（iOS 14+）- LazyVGrid自适应列 + 左对齐
+// MARK: - 真正的流式布局（iOS 14+）- 按自然宽度从左到右排，装不下才换行
 
 struct FlowCards<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
     let items: Data
     let spacing: CGFloat
     @ViewBuilder let card: (Data.Element) -> Content
+    @State private var rowData: [[Data.Element]] = [[]]
 
     var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 90, maximum: 220), spacing: spacing, alignment: .leading)],
-            alignment: .leading,
-            spacing: spacing
-        ) {
-            ForEach(Array(items), id: \.self) { item in
-                card(item)
+        VStack(alignment: .leading, spacing: spacing) {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: WidthKey.self,
+                    value: geo.size.width
+                )
+            }
+            .frame(height: 0)
+
+            ForEach(rowData.indices, id: \.self) { ri in
+                HStack(spacing: spacing) {
+                    ForEach(rowData[ri], id: \.self) { item in
+                        card(item)
+                    }
+                }
             }
         }
+        .onPreferenceChange(WidthKey.self) { width in
+            let newRows = groupIntoRows(width: width)
+            if newRows != rowData { rowData = newRows }
+        }
     }
+
+    private func groupIntoRows(width: CGFloat) -> [[Data.Element]] {
+        guard width > 0 else { return [Array(items)] }
+        let all = Array(items)
+        var rows: [[Data.Element]] = [[]]
+        var rowWidth: CGFloat = 0
+        for item in all {
+            let w = estimateWidth(item)
+            if !rows[rows.count-1].isEmpty, rowWidth + w + spacing > width {
+                rows.append([item])
+                rowWidth = w
+            } else {
+                rows[rows.count-1].append(item)
+                rowWidth += w + (rows[rows.count-1].count > 1 ? spacing : 0)
+            }
+        }
+        return rows
+    }
+
+    private func estimateWidth(_ item: Data.Element) -> CGFloat {
+        if let vw = item as? VocabWord {
+            return max(60, CGFloat(vw.word.count) * 9 + 40)
+        }
+        if let str = item as? String {
+            // 词 + 喇叭 + 翻译 + 注释 + 边距
+            return max(60, CGFloat(str.count) * 10 + 55)
+        }
+        return 100
+    }
+}
+
+struct WidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 #Preview {
