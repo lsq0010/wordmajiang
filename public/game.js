@@ -129,12 +129,14 @@ function playTile(idx){
 
     if(state.progress >= state.targetWords.length){
       setFeedback("ok", `✓ Complete! +${OK_SCORE} pts<br><span class="corr">${state.sentence.join(" ")}</span>`);
-      setTimeout(() => {
+      setTimeout(async () => {
         state.sentence = [];
         state.progress = 0;
-        deal(state.targetWords.length);
+        const ok = await loadPool();
+        if(!ok){ render(); return; }
+        deal(HAND_SIZE);
         render();
-      }, 1800);
+      }, 1500);
     } else {
       setFeedback("ok", `✓ +${OK_SCORE}`);
     }
