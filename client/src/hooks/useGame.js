@@ -28,14 +28,17 @@ export function useGame() {
   const busyRef = useRef(false);
 
   const speakWord = useCallback((word) => {
-    if (!speakerRef.current) {
-      speakerRef.current = new SpeechSynthesisUtterance();
-      speakerRef.current.lang = "en-US";
-      speakerRef.current.rate = 0.85;
-    }
-    speechSynthesis.cancel();
-    speakerRef.current.text = word;
-    speechSynthesis.speak(speakerRef.current);
+    // 异步执行避免阻塞 UI 渲染
+    setTimeout(() => {
+      if (!speakerRef.current) {
+        speakerRef.current = new SpeechSynthesisUtterance();
+        speakerRef.current.lang = "en-US";
+        speakerRef.current.rate = 0.85;
+      }
+      speechSynthesis.cancel();
+      speakerRef.current.text = word;
+      speechSynthesis.speak(speakerRef.current);
+    }, 50);
   }, []);
 
   const fetchModel = useCallback(async () => {
