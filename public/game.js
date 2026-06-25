@@ -52,9 +52,10 @@ function start(){
 function setTip(t){ $tip.textContent = t; }
 function setFeedback(cls, html){ $feedback.className = "feedback " + cls; $feedback.innerHTML = html; }
 
-// Build a tile element with word / translation / note
+// Build a tile: word / IPA / translation / note
 function makeTile(word, isHand, idx, handler){
   const g = state.glossary[word.toLowerCase()] || {};
+  const ipa = g.ipa || "";
   const cn = g.cn || "";
   const note = g.note || "";
   const div = document.createElement("div");
@@ -62,11 +63,14 @@ function makeTile(word, isHand, idx, handler){
   div.title = isHand ? "Tap to place" : "Tap to remove";
   const wordEl = document.createElement("span");
   wordEl.className = "t-word"; wordEl.textContent = word;
+  const ipaEl = document.createElement("span");
+  ipaEl.className = "t-ipa"; ipaEl.textContent = ipa;
   const cnEl = document.createElement("span");
   cnEl.className = "t-cn"; cnEl.textContent = cn;
   const noteEl = document.createElement("span");
   noteEl.className = "t-note"; noteEl.textContent = note;
   div.appendChild(wordEl);
+  if(ipa) div.appendChild(ipaEl);
   if(cn) div.appendChild(cnEl);
   if(note) div.appendChild(noteEl);
   if(handler) div.onclick = handler;

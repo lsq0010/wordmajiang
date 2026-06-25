@@ -35,10 +35,11 @@ app.get("/api/deal", async (req, res) => {
         messages: [
           {
             role: "system",
-            content:
-              "Generate ONE natural English sentence, 4 to 8 words. For each word, provide Chinese translation (cn) " +
-              "and a brief grammar/usage note in Chinese (note). Return ONLY a JSON object, no markdown:\n" +
-              '{"sentence":"the apple is red","glossary":{"the":{"cn":"那个","note":"定冠词，指特定事物"},"apple":{"cn":"苹果","note":"名词"},"is":{"cn":"是","note":"be动词第三人称单数"},"red":{"cn":"红色的","note":"形容词"}}}'
+        content:
+          "Generate ONE natural English sentence, 4 to 8 words. For each word, provide: Chinese translation (cn), " +
+          "a brief grammar/usage note in Chinese (note), and IPA pronunciation (ipa). " +
+          "Return ONLY a JSON object, no markdown:\n" +
+          '{"sentence":"the apple is red","glossary":{"the":{"cn":"那个","ipa":"ðə","note":"定冠词"},"apple":{"cn":"苹果","ipa":"ˈæpəl","note":"名词"},"is":{"cn":"是","ipa":"ɪz","note":"be动词"},"red":{"cn":"红色的","ipa":"rɛd","note":"形容词"}}}'
           },
           { role: "user", content: "Generate" }
         ],
@@ -65,7 +66,7 @@ app.get("/api/deal", async (req, res) => {
     // Ensure every word has a glossary entry
     words.forEach(w => {
       const k = w.toLowerCase();
-      if (!glossary[k]) glossary[k] = { cn: `[${w}]`, note: "" };
+      if (!glossary[k]) glossary[k] = { cn: `[${w}]`, ipa: "", note: "" };
     });
 
     const pool = shuffle([...words]);
