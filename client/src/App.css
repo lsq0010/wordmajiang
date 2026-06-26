@@ -123,8 +123,9 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
   display: flex; gap: 8px; justify-content: center; padding: 10px 16px;
   padding-bottom: calc(var(--safe-bottom) + 10px);
   border-top: 1px solid var(--border); background: #1a1a1aee; backdrop-filter: blur(10px);
-  flex-shrink: 0;
+  flex-shrink: 0; position: relative;
 }
+.logout-btn { position: absolute; left: 16px; }
 .btn {
   background: #333; color: #bbb; border: 1px solid var(--border); border-radius: 4px;
   padding: 7px 14px; font-size: 13px; cursor: pointer;

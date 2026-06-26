@@ -156,8 +156,8 @@ export default function App() {
       )}
 
       <div className="bottombar">
+        <button className="btn logout-btn" onClick={() => setLogoutOpen(true)}>Logout</button>
         <button className="btn" onClick={() => g.newRound()}>Refresh</button>
-        <button className="btn" onClick={() => setLogoutOpen(true)}>Logout</button>
       </div>
     </div>
   );
