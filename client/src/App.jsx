@@ -149,7 +149,7 @@ export default function App() {
             <div className="modal-msg">确认退出登录？</div>
             <div className="modal-btns">
               <button className="btn" onClick={() => setLogoutOpen(false)}>Cancel</button>
-              <button className="btn modal-danger" onClick={() => { clearAuth(); setToken(null); }}>Logout</button>
+              <button className="btn modal-danger" onClick={() => { setLogoutOpen(false); clearAuth(); setToken(null); }}>Logout</button>
             </div>
           </div>
         </div>
