@@ -1,9 +1,16 @@
 import { useState } from "react";
 
+function loadCreds() {
+  try {
+    return JSON.parse(localStorage.getItem("wm_creds") || "{}");
+  } catch { return {}; }
+}
+
 export default function AuthForm({ onAuth }) {
+  const saved = loadCreds();
   const [mode, setMode] = useState("login");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState(saved.username || "");
+  const [password, setPassword] = useState(saved.password || "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -19,6 +26,7 @@ export default function AuthForm({ onAuth }) {
       });
       const d = await r.json();
       if (!r.ok) { setError(d.error || "Failed"); return; }
+      try { localStorage.setItem("wm_creds", JSON.stringify({ username: username.trim(), password })); } catch {}
       onAuth(d.token, d.user);
     } catch {
       setError("Network error");
