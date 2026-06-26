@@ -4,13 +4,18 @@ const { Pool } = pkg;
 let pool;
 function getPool() {
   if (!pool) {
-    const url = process.env.DATABASE_URL || "";
-    console.log(`DB connecting: ${url.replace(/\/\/.*@/, "//***@")}`);
-    pool = new Pool({
-      connectionString: url,
+    const url = new URL(process.env.DATABASE_URL || "postgresql://localhost");
+    const cfg = {
+      host: url.hostname,
+      port: parseInt(url.port || "5432"),
+      database: url.pathname.replace("/", "") || "postgres",
+      user: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000,
-    });
+    };
+    console.log(`DB connecting: ${cfg.user}@${cfg.host}:${cfg.port}/${cfg.database}`);
+    pool = new Pool(cfg);
     pool.on("error", (e) => console.error("DB pool error:", e.message));
   }
   return pool;
