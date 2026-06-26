@@ -67,7 +67,7 @@ export default function App() {
         ) : (<>
         {g.sentenceCn && (
           <div className="target">
-            <div className="target-cn" onClick={() => setShowCn(!showCn)}>
+            <div className="target-cn" onClick={() => setShowCn(!showCn)} style={{cursor:"pointer"}}>
               {showCn ? g.sentenceCn : "***"}
             </div>
             <div className="target-sentence">
@@ -83,7 +83,7 @@ export default function App() {
         {g.feedback && <div className={`feedback ${g.fType}`}>{g.feedback}</div>}
 
         <div className="section">
-          <span className="label">· {g.sentenceCn || ""}</span>
+          <span className="label" onClick={() => setShowCn(!showCn)} style={{cursor:"pointer"}}>· {g.sentenceCn ? (showCn ? g.sentenceCn : "***") : ""}</span>
           {g.reason && <div className="reason">• {g.reason}</div>}
           <div className="tiles">
             {g.hand.map((w, i) => (
@@ -95,7 +95,7 @@ export default function App() {
 
         {firstRound && (
           <div className="tutorial">
-            用已掌握的词带新词，像滚雪球一样逐步扩展词汇量。点击单词拼成句子，单词熟练度从0到1，逐步提升，点击顶部中文可隐藏提示。
+            用已掌握的词带新词，像滚雪球一样逐步扩展词汇量。点击单词拼成句子，单词熟练度从0到1逐步提升。
           </div>
         )}
 
