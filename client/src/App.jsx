@@ -1,11 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "./hooks/useGame";
 import WordTile from "./components/WordTile";
 
 export default function App() {
   const g = useGame();
+  const [showCn, setShowCn] = useState(true);
+  const [expandedWord, setExpandedWord] = useState(null);
+  const [firstRound, setFirstRound] = useState(true);
 
   useEffect(() => { g.start(); }, []);
+  useEffect(() => { setShowCn(true); }, [g.sentenceCn]);
+  useEffect(() => {
+    if (g.feedback === "✓ Done!") setFirstRound(false);
+  }, [g.feedback]);
 
   if (g.loading) return <div className="loading">Generating board...</div>;
 
@@ -21,72 +28,80 @@ export default function App() {
         <div className="topbar-right">
           <div className="stat"><b>{g.score}</b><span>Score</span></div>
           <div className="stat"><b>{g.hand.length}</b><span>Hand</span></div>
-          <div className="stat"><b>{g.bank.length}</b><span>Deck</span></div>
+          <div className="stat" onClick={() => g.setShowVocab(!g.showVocab)} style={{cursor:"pointer"}}>
+            <b>{g.vocab.length}</b><span>Words</span>
+          </div>
         </div>
       </div>
 
       <div className="main-area">
-        {g.targetWords.length > 0 && (
+        {g.sentenceCn && (
           <div className="target">
-            <span className="label">Target</span>
-            <div className="target-text">
-              {g.targetWords.map((w, i) => (
-                <span key={i} className={i < g.sentence.length ? "done" : ""}>{w}</span>
-              ))}
+            <div className="target-cn" onClick={() => setShowCn(!showCn)}>
+              {showCn ? g.sentenceCn : "***"}
+            </div>
+            <div className="target-sentence">
+              {g.sentence.length === 0 ? (
+                <span className="target-muted">Tap a word below to place it</span>
+              ) : (
+                g.sentence.join(" ")
+              )}
             </div>
           </div>
         )}
-
-        <div className="section">
-          <span className="label">Your Sentence</span>
-          <div className="tiles">
-            {g.sentence.length === 0 ? (
-              <span className="muted">Tap a word below to place it</span>
-            ) : (
-              g.sentence.map((w, i) => (
-                <WordTile key={`s-${i}-${w}`} word={w} glossary={g.glossary[w.toLowerCase()]} isSentence
-                  onTap={() => g.removeSentence(w)} onSpeak={g.speak} />
-              ))
-            )}
-          </div>
-        </div>
 
         {g.feedback && <div className={`feedback ${g.fType}`}>{g.feedback}</div>}
 
         <div className="section">
           <span className="label">Your Hand</span>
+          {g.reason && <div className="reason">• {g.reason}</div>}
           <div className="tiles">
             {g.hand.map((w, i) => (
-              <WordTile key={`h-${i}-${w}`} word={w} glossary={g.glossary[w.toLowerCase()]}
-                onTap={() => g.tap(w, i)} onSpeak={g.speak} />
+              <WordTile key={`h-${i}-${w}`} word={w} glossary={g.getGlossary(w)}
+                onTap={() => g.tap(w, i)} />
             ))}
           </div>
         </div>
 
-        {g.showVocab && (
-          <div className="section">
-            <span className="label">Learned Words ({g.vocab.length})</span>
-            <div className="tiles">
-              {g.vocab.map(v => (
-                <div key={v.word} className="v-item" style={{ background: mc(v.cls) + "22" }}>
-                  <span className="vw">{v.word}</span>
-                  <span className="vf">{v.ok}/{v.seen}</span>
-                </div>
-              ))}
-            </div>
+        {firstRound && (
+          <div className="tutorial">
+            用已掌握的词带新词，像滚雪球一样逐步扩展词汇量。点击单词拼成句子，单词熟练度从0到1，逐步提升，点击顶部中文可隐藏提示。
           </div>
         )}
 
         {g.tip && !g.feedback && <span className="tip">{g.tip}</span>}
       </div>
 
+      {g.showVocab && (
+        <div className="vocab-overlay">
+          <div className="vocab-header">
+            <span className="vocab-title">Word Bank ({g.vocab.length})</span>
+            <button className="btn" onClick={() => g.setShowVocab(false)}>Close</button>
+          </div>
+          <div className="vocab-body">
+              {g.vocab.map(v => {
+                const expanded = expandedWord === v.word;
+                return (
+                  <div key={v.word} className={`v-item ${expanded ? "v-expanded" : ""}`}
+                    style={{ background: mc(v.cls) + "22", borderColor: mc(v.cls) + "44" }}
+                    onClick={() => {
+                      g.speak(v.word);
+                      setExpandedWord(expanded ? null : v.word);
+                    }}>
+                    <span className="vw" style={{ color: mc(v.cls) }}>{v.word}</span>
+                    {expanded && v.cn && <span className="vd-cn">{v.cn}</span>}
+                    {expanded && v.ipa && <span className="vd-ipa">{v.ipa}</span>}
+                    {expanded && v.note && <span className="vd-note">{v.note}</span>}
+                    {expanded && <span className="vd-mastery">熟练度 {(v.mastery || 0).toFixed(2)}</span>}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       <div className="bottombar">
-        <button className="btn" onClick={g.clearAll}>Clear</button>
-        <button className="btn" onClick={g.draw} disabled={g.bank.length === 0 || g.hand.length >= 16}>Draw</button>
-        <button className="btn" onClick={g.start}>New Game</button>
-        <button className="btn" onClick={() => g.setShowVocab(!g.showVocab)}>
-          {g.showVocab ? "Hide" : "Words"}
-        </button>
+        <button className="btn" onClick={() => g.newRound()}>Refresh</button>
       </div>
     </div>
   );

@@ -1,14 +1,16 @@
 import { useState, useCallback, useRef } from "react";
 
-const HAND = 12, HMAX = 16, OK = 10, BAD = 5;
+const HAND = 12, HMAX = 16;
 
 export function useGame() {
   const [bank, setBank] = useState([]);
   const [hand, setHand] = useState([]);
   const [sentence, setSentence] = useState([]);
   const [targetWords, setTargetWords] = useState([]);
+  const [sentenceCn, setSentenceCn] = useState("");
+  const [reason, setReason] = useState("");
   const [glossary, setGlossary] = useState({});
-  const [score, setScore] = useState(0);
+  const [localMastery, setLocalMastery] = useState({});
   const [progress, setProgress] = useState(0);
   const [level, setLevel] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -43,10 +45,10 @@ export function useGame() {
       if (d.wordFamiliarity) {
         setVocab(Object.entries(d.wordFamiliarity)
           .map(([w, f]) => {
-            const a = f.seen ? (f.correct || 0) / f.seen : 0;
-            const t = f.seen ? (f.totalTime || 0) / f.seen : 9e4;
-            return { word: w, seen: f.seen, ok: f.correct || 0, cls: a >= .9 && t < 2000 ? "m" : a >= .7 ? "f" : "w" };
-          }).sort((a, b) => ({ w: 0, f: 1, m: 2 })[a.cls] - ({ w: 0, f: 1, m: 2 })[b.cls]));
+            const m = f.mastery ?? 0;
+            const cls = m >= 1 ? "m" : m >= 0.5 ? "f" : "w";
+            return { word: w, seen: f.seen, ok: f.correct || 0, mastery: m, cls, cn: f.cn, ipa: f.ipa, note: f.note };
+          }).sort((a, b) => a.mastery - b.mastery));
       }
       if (typeof d.totalScore === "number") {
         setScore(d.totalScore);
@@ -56,28 +58,38 @@ export function useGame() {
     return savedScore;
   }, []);
 
-  const submit = useCallback(async (currentScore) => {
+  const submit = useCallback(async () => {
     if (!logRef.current.length) return;
     const t = logRef.current.reduce((s, a) => s + (a.t || 0), 0);
+    const sc = Object.values(localMastery).reduce((s, m) => s + m, 0);
     try {
       await fetch("/api/stats", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words: logRef.current.map(a => ({ word: a.w, correct: a.ok, timeMs: a.t || 0, action: a.act || "play", timestamp: a.ts })), totalTimeMs: t, score: currentScore }) });
+        body: JSON.stringify({ words: logRef.current.map(a => ({ word: a.w, correct: a.ok, timeMs: a.t || 0, action: a.act || "play", timestamp: a.ts })), totalTimeMs: t, score: sc }) });
     } catch {}
     fetchModel();
-  }, [fetchModel]);
+  }, [fetchModel, localMastery]);
 
-  const newRound = useCallback(async (currentScore) => {
+  const newRound = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/deal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ score: currentScore }) });
+      const sc = Object.values(localMastery).reduce((s, m) => s + m, 0);
+      const r = await fetch("/api/deal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ score: sc }) });
       const d = await r.json();
       if (d.error) { setTip("Failed"); setLoading(false); return; }
       const p = [...d.pool], h = [];
       while (h.length < HAND && p.length) h.push(p.pop());
       setBank(p); setHand(h); setTargetWords(d.targetWords);
-      setGlossary(d.glossary || {}); if (d.level) setLevel(d.level);
+      setSentenceCn(d.sentenceCn || "");
+      setReason(d.reason || "");
+      const gl = d.glossary || {};
+      setGlossary(gl);
+      // 初始化本地熟练度表
+      const lm = {};
+      Object.entries(gl).forEach(([k, v]) => { lm[k.toLowerCase()] = v.mastery ?? 0; });
+      setLocalMastery(lm);
+      if (d.level) setLevel(d.level);
       setSentence([]); setProgress(0);
-      logRef.current = []; t0Ref.current = Date.now();
+      logRef.current = [];
       setFeedback(""); setFType(""); setTip("Tap a word");
     } catch { setTip("Network error"); }
     setLoading(false);
@@ -85,10 +97,10 @@ export function useGame() {
 
   const start = useCallback(async () => {
     setHand([]); setSentence([]); setTargetWords([]);
-    setGlossary({}); logRef.current = [];
+    setSentenceCn(""); setReason(""); setGlossary({}); setLocalMastery({}); logRef.current = [];
     setFeedback(""); setFType(""); setTip("");
-    const savedScore = await fetchModel(); // 从后端加载分数和等级
-    await newRound(savedScore);
+    await fetchModel();
+    await newRound();
   }, [fetchModel, newRound]);
 
   /** 点手牌 */
@@ -99,17 +111,20 @@ export function useGame() {
 
     const now = performance.now();
     const prev = logRef.current[logRef.current.length - 1];
-    const ms = prev ? Math.round(now - prev.ts) : t0Ref.current ? Math.round(now - t0Ref.current) : 1000;
+    const firstTap = !prev;
+    if (firstTap) t0Ref.current = now;
+    const ms = prev ? Math.round(now - prev.ts) : 0;
 
     if (word.toLowerCase() === tw[pg].toLowerCase()) {
-      // ✅ 正确
+      // ✅ 正确：本地立即+0.3
       speak(word);
+      setFeedback(""); setFType("");
+      const k = word.toLowerCase();
+      setLocalMastery(prev => ({ ...prev, [k]: Math.min(1, (prev[k] ?? 0) + 0.3) }));
       logRef.current.push({ w: word, ok: true, t: ms, act: "play", ts: now });
 
       setHand(prev => { const c = [...prev]; c.splice(idx, 1); return c; });
       setSentence(prev => [...prev, word]);
-      const ns = score + OK;
-      setScore(ns);
       const np = pg + 1;
       setProgress(np);
 
@@ -117,16 +132,21 @@ export function useGame() {
         setFeedback("✓ Done!");
         setFType("ok");
         setLoading(true);
-        const finalScore = ns;
-        submit(finalScore).then(() => newRound(finalScore));
-      } else {
-        setFeedback("✓");
-        setFType("ok");
+        submit().then(() => newRound());
       }
     } else {
-      // ❌ 错误：只说错，不泄露答案
+      // ❌ 错误：选错的词和正确答案都-0.3，本地立即生效
+      speak(word);
+      const kw = word.toLowerCase();
+      const kt = tw[pg].toLowerCase();
+      setLocalMastery(prev => {
+        const next = { ...prev };
+        next[kw] = Math.max(0, (next[kw] ?? 0) - 0.3);
+        next[kt] = Math.max(0, (next[kt] ?? 0) - 0.3);
+        return next;
+      });
       logRef.current.push({ w: word, ok: false, t: ms, act: "play", ts: now });
-      setScore(s => s - BAD);
+      logRef.current.push({ w: tw[pg], ok: false, t: ms, act: "missed", ts: now });
       setFeedback("✗ Wrong");
       setFType("bad");
     }
@@ -145,6 +165,12 @@ export function useGame() {
     });
   }
 
+  function getGlossary(word) {
+    const g = glossary[word.toLowerCase()] || {};
+    const m = localMastery[word.toLowerCase()];
+    return m != null ? { ...g, mastery: m } : g;
+  }
+
   function clearAll() {
     setHand(h => [...h, ...sentence]);
     setSentence([]); setProgress(0);
@@ -161,11 +187,16 @@ export function useGame() {
     });
   }
 
+  const score = vocab.reduce((s, v) => {
+    const lm = localMastery[v.word.toLowerCase()];
+    return s + (lm != null ? lm : (v.mastery || 0));
+  }, 0);
+
   return {
-    bank, hand, sentence, targetWords, glossary,
+    bank, hand, sentence, targetWords, sentenceCn, reason, glossary,
     score, progress, level, loading,
     feedback, fType, tip,
     vocab, showVocab, setShowVocab,
-    start, tap, removeSentence, clearAll, draw, speak,
+    start, newRound, tap, removeSentence, clearAll, draw, speak, getGlossary,
   };
 }
