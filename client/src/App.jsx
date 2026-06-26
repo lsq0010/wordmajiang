@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useGame } from "./hooks/useGame";
 import WordTile from "./components/WordTile";
 import AuthForm from "./components/AuthForm";
+import LogoutModal from "./components/LogoutModal";
 
 function getToken() {
   try { return localStorage.getItem("wm_token"); } catch { return null; }
@@ -25,11 +26,9 @@ export default function App() {
   });
   const [expandedWord, setExpandedWord] = useState(null);
   const [firstRound, setFirstRound] = useState(true);
-  const [logoutOpen, setLogoutOpen] = useState(false);
 
   useEffect(() => {
     if (token) g.start();
-    else setLogoutOpen(false);
   }, [token]);
 
   useEffect(() => {
@@ -45,7 +44,6 @@ export default function App() {
   }, [showCn]);
 
   const handleAuth = (t, user) => {
-    setLogoutOpen(false);
     saveAuth(t, user);
     setToken(t);
   };
@@ -145,20 +143,8 @@ export default function App() {
         </div>
       )}
 
-      {logoutOpen && (
-        <div className="modal-overlay" onClick={() => setLogoutOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-msg">确认退出登录？</div>
-            <div className="modal-btns">
-              <button className="btn" onClick={() => setLogoutOpen(false)}>Cancel</button>
-              <button className="btn modal-danger" onClick={() => { setLogoutOpen(false); clearAuth(); setToken(null); }}>Logout</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="bottombar">
-        <button className="btn logout-btn" onClick={() => setLogoutOpen(true)}>Logout</button>
+        <LogoutModal onConfirm={() => { clearAuth(); setToken(null); }} />
         <button className="btn" onClick={() => g.newRound()}>Refresh</button>
       </div>
     </div>
