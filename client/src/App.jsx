@@ -53,7 +53,7 @@ export default function App() {
           <span className="lv">Lv.{g.level}</span>
         </div>
         <div className="topbar-right">
-          <div className="stat"><b>{g.score}</b><span>Score</span></div>
+          <div className="stat"><b>{g.score.toFixed(1)}</b><span>Score</span></div>
           <div className="stat"><b>{g.hand.length}</b><span>Hand</span></div>
           <div className="stat" onClick={() => g.setShowVocab(!g.showVocab)} style={{cursor:"pointer"}}>
             <b>{g.vocab.length}</b><span>Words</span>
