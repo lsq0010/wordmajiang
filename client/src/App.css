@@ -47,7 +47,7 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
 .target {
   background: var(--card2); border-radius: var(--radius);
   padding: 18px 12px; text-align: center; display: flex; flex-direction: column;
-  align-items: center; gap: 10px; min-height: 130px; justify-content: center;
+  align-items: center; gap: 10px; min-height: 110px; justify-content: center;
 }
 .target-cn { font-size: 14px; color: var(--muted); cursor: pointer; user-select: none; }
 .target-sentence { font-size: 16px; font-weight: 600; color: var(--text); word-spacing: 4px; }
