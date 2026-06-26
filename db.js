@@ -43,13 +43,41 @@ async function ensureTables() {
   `);
 }
 
+async function resolve4(hostname) {
+  // Try Google DNS-over-HTTPS to get IPv4, bypassing Render's local DNS
+  try {
+    const r = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=A`);
+    const d = await r.json();
+    if (d.Answer?.length) return d.Answer[0].data;
+  } catch {}
+  // Fallback: try Cloudflare DoH
+  try {
+    const r = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostname)}&type=A`, {
+      headers: { Accept: "application/dns-json" },
+    });
+    const d = await r.json();
+    if (d.Answer?.length) return d.Answer[0].data;
+  } catch {}
+  return null;
+}
+
 export async function initDb() {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) throw new Error("DATABASE_URL not configured");
   const url = new URL(dbUrl);
-  console.log(`DB connecting: ${url.username}@${url.hostname}:${url.port}${url.pathname}`);
+  const hostname = url.hostname;
+
+  // Try to get IPv4 address via DoH
+  const ipv4 = await resolve4(hostname);
+  const host = ipv4 || hostname;
+  console.log(`DB connecting: ${url.username}@${host}:${url.port}${url.pathname}${ipv4 ? " (IPv4 via DoH)" : ""}`);
+
   pool = new Pool({
-    connectionString: dbUrl,
+    host,
+    port: parseInt(url.port || "5432"),
+    database: url.pathname.replace("/", "") || "postgres",
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
     ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 15000,
   });
