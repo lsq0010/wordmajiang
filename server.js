@@ -263,7 +263,8 @@ try {
   const startCount = await getUserCount();
   console.log(`DB ready, users: ${startCount}`);
 } catch (e) {
-  console.warn(`DB init failed: ${e.message} — API will return errors until DATABASE_URL is set`);
+  console.error(`DB init failed: ${e.message}`);
+  console.error(e.stack);
 }
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`文字麻将已启动: http://localhost:${PORT}`);

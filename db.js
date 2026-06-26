@@ -4,10 +4,14 @@ const { Pool } = pkg;
 let pool;
 function getPool() {
   if (!pool) {
+    const url = process.env.DATABASE_URL || "";
+    console.log(`DB connecting: ${url.replace(/\/\/.*@/, "//***@")}`);
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: url,
       ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000,
     });
+    pool.on("error", (e) => console.error("DB pool error:", e.message));
   }
   return pool;
 }
