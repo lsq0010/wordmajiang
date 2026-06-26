@@ -19,7 +19,10 @@ function clearAuth() {
 export default function App() {
   const [token, setToken] = useState(getToken);
   const g = useGame(token);
-  const [showCn, setShowCn] = useState(true);
+  const [showCn, setShowCn] = useState(() => {
+    try { const v = localStorage.getItem("wm_showCn"); return v !== null ? v === "1" : true; }
+    catch { return true; }
+  });
   const [expandedWord, setExpandedWord] = useState(null);
   const [firstRound, setFirstRound] = useState(true);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -36,6 +39,10 @@ export default function App() {
   useEffect(() => {
     if (g.authError) { clearAuth(); setToken(null); }
   }, [g.authError]);
+
+  useEffect(() => {
+    try { localStorage.setItem("wm_showCn", showCn ? "1" : "0"); } catch {}
+  }, [showCn]);
 
   const handleAuth = (t, user) => {
     saveAuth(t, user);
