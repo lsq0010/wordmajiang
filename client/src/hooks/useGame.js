@@ -13,12 +13,17 @@ export function useGame(token) {
   const [glossary, setGlossary] = useState({});
   const [localMastery, setLocalMastery] = useState({});
   const [progress, setProgress] = useState(0);
-  const [level, setLevel] = useState(1);
+  const [level, setLevel] = useState(() => {
+    try { return Number(localStorage.getItem("wm_level")) || 1; } catch { return 1; }
+  });
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
   const [fType, setFType] = useState("");
   const [tip, setTip] = useState("");
-  const [vocab, setVocab] = useState([]);
+  const [vocab, setVocab] = useState(() => {
+    try { const d = JSON.parse(localStorage.getItem("wm_vocab") || "[]"); return Array.isArray(d) ? d : []; }
+    catch { return []; }
+  });
   const [showVocab, setShowVocab] = useState(false);
   const [authError, setAuthError] = useState(false);
 
@@ -51,14 +56,16 @@ export function useGame(token) {
       const r = await fetch("/api/model", { headers: authHeaders() });
       checkAuth(r);
       const d = await r.json();
-      if (d.level) setLevel(d.level);
+      if (d.level) { setLevel(d.level); try { localStorage.setItem("wm_level", d.level); } catch {} }
       if (d.wordFamiliarity) {
-        setVocab(Object.entries(d.wordFamiliarity)
+        const v = Object.entries(d.wordFamiliarity)
           .map(([w, f]) => {
             const m = f.mastery ?? 0;
             const cls = m >= 1 ? "m" : m >= 0.5 ? "f" : "w";
             return { word: w, seen: f.seen, ok: f.correct || 0, mastery: m, cls, cn: f.cn, ipa: f.ipa, note: f.note };
-          }).sort((a, b) => a.mastery - b.mastery));
+          }).sort((a, b) => a.mastery - b.mastery);
+        setVocab(v);
+        try { localStorage.setItem("wm_vocab", JSON.stringify(v)); } catch {}
       }
       if (typeof d.totalScore === "number") {
         savedScore = d.totalScore;
@@ -98,7 +105,7 @@ export function useGame(token) {
       const lm = {};
       Object.entries(gl).forEach(([k, v]) => { lm[k.toLowerCase()] = v.mastery ?? 0; });
       setLocalMastery(lm);
-      if (d.level) setLevel(d.level);
+      if (d.level) { setLevel(d.level); try { localStorage.setItem("wm_level", d.level); } catch {} }
       setSentence([]); setProgress(0);
       logRef.current = [];
       setFeedback(""); setFType(""); setTip("Tap a word");

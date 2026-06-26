@@ -13,7 +13,7 @@ function saveAuth(token, user) {
   } catch {}
 }
 function clearAuth() {
-  try { localStorage.removeItem("wm_token"); localStorage.removeItem("wm_user"); } catch {}
+  try { localStorage.removeItem("wm_token"); localStorage.removeItem("wm_user"); localStorage.removeItem("wm_vocab"); localStorage.removeItem("wm_level"); } catch {}
 }
 
 export default function App() {
