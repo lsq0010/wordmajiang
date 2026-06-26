@@ -1,28 +1,31 @@
 import dns from "dns";
-dns.setDefaultResultOrder("ipv4first");
-
 import pkg from "pg";
 const { Pool } = pkg;
 
-let pool;
-function getPool() {
-  if (!pool) {
+let pgPool;
+async function getPool() {
+  if (!pgPool) {
     const url = new URL(process.env.DATABASE_URL || "postgresql://localhost");
+    const hostname = url.hostname;
+    let addr = hostname;
+    try {
+      const ips = await dns.resolve4(hostname);
+      if (ips.length) addr = ips[0];
+    } catch {}
     const cfg = {
-      host: url.hostname,
+      host: addr,
       port: parseInt(url.port || "5432"),
       database: url.pathname.replace("/", "") || "postgres",
       user: decodeURIComponent(url.username),
       password: decodeURIComponent(url.password),
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000,
-      family: 4,
     };
     console.log(`DB connecting: ${cfg.user}@${cfg.host}:${cfg.port}/${cfg.database}`);
-    pool = new Pool(cfg);
-    pool.on("error", (e) => console.error("DB pool error:", e.message));
+    pgPool = new Pool(cfg);
+    pgPool.on("error", (e) => console.error("DB pool error:", e.message));
   }
-  return pool;
+  return pgPool;
 }
 
 let tablesReady = false;
