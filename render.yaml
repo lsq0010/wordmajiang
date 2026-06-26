@@ -2,6 +2,7 @@ services:
   - type: web
     name: wordmajiang
     plan: free
+    branch: main
     env: node
     buildCommand: cd client && npm install && npm run build && cd ..
     startCommand: node server.js
