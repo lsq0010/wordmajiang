@@ -22,7 +22,7 @@ export default function AuthForm({ onAuth }) {
       const r = await fetch(`/api/auth/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
       });
       const d = await r.json();
       if (!r.ok) { setError(d.error || "Failed"); return; }

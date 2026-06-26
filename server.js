@@ -23,12 +23,13 @@ app.post("/api/auth/register", (req, res) => {
   if (!username || typeof username !== "string" || username.trim().length < 3 || username.trim().length > 20) {
     return res.status(400).json({ error: "Username must be 3-20 characters" });
   }
-  if (!password || typeof password !== "string" || password.length < 6) {
+  const pwd = password.trim();
+  if (!pwd || typeof pwd !== "string" || pwd.length < 6) {
     return res.status(400).json({ error: "Password must be at least 6 characters" });
   }
   const u = findUserByUsername(username.trim());
   if (u) return res.status(409).json({ error: "Username already taken" });
-  const hash = hashPassword(password);
+  const hash = hashPassword(pwd);
   const user = createUser(username.trim(), hash);
   const token = signToken(user.id);
   res.json({ token, user: { id: user.id, username: user.username, level: user.level } });
@@ -40,7 +41,7 @@ app.post("/api/auth/login", (req, res) => {
     return res.status(400).json({ error: "Username and password required" });
   }
   const u = findUserByUsername(username.trim());
-  if (!u || !comparePassword(password, u.passwordHash)) {
+  if (!u || !comparePassword(password.trim(), u.passwordHash)) {
     return res.status(401).json({ error: "Invalid username or password" });
   }
   const token = signToken(u.id);
