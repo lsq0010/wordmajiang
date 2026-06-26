@@ -133,7 +133,7 @@ export default function App() {
 
       <div className="bottombar">
         <button className="btn" onClick={() => g.newRound()}>Refresh</button>
-        <button className="btn" onClick={() => { clearAuth(); setToken(null); }}>Logout</button>
+        <button className="btn" onClick={() => { if (confirm("确认退出登录？")) { clearAuth(); setToken(null); } }}>Logout</button>
       </div>
     </div>
   );
