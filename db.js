@@ -1,4 +1,4 @@
-import dns from "dns";
+import { lookup } from "dns/promises";
 import pkg from "pg";
 const { Pool } = pkg;
 
@@ -52,9 +52,11 @@ export async function initDb() {
   const hostname = url.hostname;
   let addr = hostname;
   try {
-    const ips = await dns.resolve4(hostname);
-    if (ips.length) addr = ips[0];
-  } catch {}
+    const { address } = await lookup(hostname, { family: 4 });
+    addr = address;
+  } catch (e) {
+    console.warn(`DNS lookup failed for ${hostname}: ${e.message}, using hostname`);
+  }
   console.log(`DB connecting: ${url.username}@${addr}:${url.port}/${url.pathname.replace("/", "")}`);
   pool = new Pool({
     host: addr,
