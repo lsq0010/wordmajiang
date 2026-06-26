@@ -1,9 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 
-const HAND_SIZE = 12;
-const HAND_MAX = 16;
-const OK_SCORE = 10;
-const BAD_PENALTY = 5;
+const HAND = 12, HMAX = 16, OK = 10, BAD = 5;
 
 export function useGame() {
   const [bank, setBank] = useState([]);
@@ -14,31 +11,25 @@ export function useGame() {
   const [score, setScore] = useState(0);
   const [progress, setProgress] = useState(0);
   const [level, setLevel] = useState(1);
-  const [busy, setBusy] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [feedbackMessage, setFeedbackMessage] = useState("");
-  const [feedbackType, setFeedbackType] = useState("");
-  const [tipText, setTipText] = useState("");
-  const [vocabWords, setVocabWords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState("");
+  const [fType, setFType] = useState("");
+  const [tip, setTip] = useState("");
+  const [vocab, setVocab] = useState([]);
   const [showVocab, setShowVocab] = useState(false);
 
-  const roundStartRef = useRef(0);
-  const actionLogRef = useRef([]);
+  const logRef = useRef([]);
+  const t0Ref = useRef(0);
   const speakerRef = useRef(null);
-  const busyRef = useRef(false);
 
-  const speakWord = useCallback((word) => {
-    // 异步执行避免阻塞 UI 渲染
+  const speak = useCallback((w) => {
     setTimeout(() => {
-      if (!speakerRef.current) {
-        speakerRef.current = new SpeechSynthesisUtterance();
-        speakerRef.current.lang = "en-US";
-        speakerRef.current.rate = 0.85;
-      }
+      const u = speakerRef.current || (speakerRef.current = new SpeechSynthesisUtterance());
+      u.lang = "en-US"; u.rate = 0.85;
       speechSynthesis.cancel();
-      speakerRef.current.text = word;
-      speechSynthesis.speak(speakerRef.current);
-    }, 50);
+      u.text = w;
+      speechSynthesis.speak(u);
+    }, 20);
   }, []);
 
   const fetchModel = useCallback(async () => {
@@ -47,258 +38,124 @@ export function useGame() {
       const d = await r.json();
       if (d.level) setLevel(d.level);
       if (d.wordFamiliarity) {
-        const words = Object.entries(d.wordFamiliarity)
+        setVocab(Object.entries(d.wordFamiliarity)
           .map(([w, f]) => {
-            const acc = f.seen > 0 ? (f.correct || 0) / f.seen : 0;
-            const avgT = f.seen > 0 ? (f.totalTime || 0) / f.seen : 99999;
-            let cls = "weak";
-            if (acc >= 0.9 && avgT < 2000) cls = "mastered";
-            else if (acc >= 0.7) cls = "familiar";
-            return { word: w, seen: f.seen, correct: f.correct || 0, masteryClass: cls };
-          })
-          .sort((a, b) => {
-            const o = { weak: 0, familiar: 1, mastered: 2 };
-            return (o[a.masteryClass] ?? 2) - (o[b.masteryClass] ?? 2);
-          });
-        setVocabWords(words);
+            const a = f.seen ? (f.correct || 0) / f.seen : 0;
+            const t = f.seen ? (f.totalTime || 0) / f.seen : 9e4;
+            return { word: w, seen: f.seen, ok: f.correct || 0, cls: a >= .9 && t < 2000 ? "m" : a >= .7 ? "f" : "w" };
+          }).sort((a, b) => ({ w: 0, f: 1, m: 2 })[a.cls] - ({ w: 0, f: 1, m: 2 })[b.cls]));
       }
     } catch {}
   }, []);
 
-  const submitStats = useCallback(
-    async (actionLog, currentScore) => {
-      if (actionLog.length === 0) return;
-      const total = actionLog.reduce((s, a) => s + (a.timeMs || 0), 0);
-      try {
-        const r = await fetch("/api/stats", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            words: actionLog.map((a) => ({
-              word: a.word,
-              correct: a.correct,
-              timeMs: a.timeMs || 0,
-              action: a.action || "play",
-              timestamp: a.timestamp,
-            })),
-            totalTimeMs: total,
-            score: currentScore,
-          }),
-        });
-        const d = await r.json();
-        if (d.level) setLevel(d.level);
-      } catch {}
-      fetchModel();
-    },
-    [fetchModel]
-  );
+  const submit = useCallback(async () => {
+    if (!logRef.current.length) return;
+    const t = logRef.current.reduce((s, a) => s + (a.t || 0), 0);
+    try {
+      await fetch("/api/stats", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ words: logRef.current.map(a => ({ word: a.w, correct: a.ok, timeMs: a.t || 0, action: a.act || "play", timestamp: a.ts })), totalTimeMs: t, score }) });
+    } catch {}
+    fetchModel();
+  }, [score, fetchModel]);
 
-  const newRound = useCallback(
-    async (currentScore) => {
-      try {
-        const r = await fetch("/api/deal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ score: currentScore }),
-        });
-        const d = await r.json();
-        if (d.error) {
-          setTipText("Failed: " + d.error);
-          setIsLoading(false);
-          return;
-        }
-        setBank(d.pool);
-        setTargetWords(d.targetWords);
-        setGlossary(d.glossary || {});
-        if (d.level) setLevel(d.level);
-
-        const pool = [...d.pool];
-        const newHand = [];
-        while (newHand.length < HAND_SIZE && pool.length > 0 && newHand.length < HAND_MAX) {
-          newHand.push(pool.pop());
-        }
-        setBank(pool);
-        setHand(newHand);
-        setSentence([]);
-        setProgress(0);
-        actionLogRef.current = [];
-        roundStartRef.current = Date.now();
-        setFeedbackMessage("");
-        setFeedbackType("");
-        setTipText("Tap the next word to build the sentence");
-      } catch (e) {
-        setTipText("Failed: " + e.message);
-      }
-      setIsLoading(false);
-    },
-    []
-  );
+  const newRound = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/deal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ score }) });
+      const d = await r.json();
+      if (d.error) { setTip("Failed"); setLoading(false); return; }
+      const p = [...d.pool], h = [];
+      while (h.length < HAND && p.length) h.push(p.pop());
+      setBank(p); setHand(h); setTargetWords(d.targetWords);
+      setGlossary(d.glossary || {}); if (d.level) setLevel(d.level);
+      setSentence([]); setProgress(0);
+      logRef.current = []; t0Ref.current = Date.now();
+      setFeedback(""); setFType(""); setTip("Tap a word");
+    } catch { setTip("Network error"); }
+    setLoading(false);
+  }, [score]);
 
   const start = useCallback(async () => {
-    setScore(0);
-    setProgress(0);
-    setLevel(1);
-    setHand([]);
-    setSentence([]);
-    setBank([]);
-    setTargetWords([]);
-    setGlossary({});
-    actionLogRef.current = [];
-    setFeedbackMessage("");
-    setFeedbackType("");
-    setTipText("");
-    setIsLoading(true);
-    busyRef.current = false;
-    setBusy(false);
-    await fetchModel();
-    await newRound(0);
+    setScore(0); setLevel(1); setHand([]); setSentence([]); setTargetWords([]);
+    setGlossary({}); logRef.current = [];
+    setFeedback(""); setFType(""); setTip("");
+    await fetchModel(); await newRound();
   }, [fetchModel, newRound]);
 
-  const playTile = useCallback(
-    (word, idx) => {
-      if (busyRef.current) return;
-      busyRef.current = true;
-      setBusy(true);
+  /** 点手牌 */
+  function tap(word, idx) {
+    const tw = targetWords;
+    const pg = progress;
+    if (pg >= tw.length) return;
 
-      const now = performance.now();
-      const lastLog = actionLogRef.current[actionLogRef.current.length - 1];
-      const startTime = roundStartRef.current;
-      const elapsed = lastLog
-        ? Math.round(now - lastLog.timestamp)
-        : startTime > 0
-        ? Math.round(now - startTime)
-        : 1000;
+    const now = performance.now();
+    const prev = logRef.current[logRef.current.length - 1];
+    const ms = prev ? Math.round(now - prev.ts) : t0Ref.current ? Math.round(now - t0Ref.current) : 1000;
 
-      const expected = targetWords[progress];
-      if (!expected) {
-        busyRef.current = false;
-        setBusy(false);
-        return;
-      }
+    if (word.toLowerCase() === tw[pg].toLowerCase()) {
+      // ✅ 正确
+      speak(word);
+      logRef.current.push({ w: word, ok: true, t: ms, act: "play", ts: now });
 
-      if (word.toLowerCase() === expected.toLowerCase()) {
-        speakWord(word);
-        const newAction = { word, correct: true, timeMs: elapsed, action: "play", timestamp: now };
-        actionLogRef.current = [...actionLogRef.current, newAction];
+      setHand(prev => { const c = [...prev]; c.splice(idx, 1); return c; });
+      setSentence(prev => [...prev, word]);
+      const ns = score + OK;
+      setScore(ns);
+      const np = pg + 1;
+      setProgress(np);
 
-        setHand((prev) => {
-          const copy = [...prev];
-          copy.splice(idx, 1);
-          return copy;
-        });
-        setSentence((prev) => [...prev, word]);
-        setScore((s) => s + OK_SCORE);
-        const newProgress = progress + 1;
-        setProgress(newProgress);
-
-        if (newProgress >= targetWords.length) {
-          const finalLog = actionLogRef.current;
-          const finalScore = score + OK_SCORE;
-          setFeedbackType("ok");
-          setFeedbackMessage(`Complete! +${OK_SCORE}`);
-          busyRef.current = false;
-          setBusy(false);
-
-          setTimeout(() => {
-            submitStats(finalLog, finalScore);
-            setSentence([]);
-            setProgress(0);
-            roundStartRef.current = performance.now();
-            actionLogRef.current = [];
-            busyRef.current = true;
-            setBusy(true);
-            newRound(finalScore).then(() => {
-              busyRef.current = false;
-              setBusy(false);
-            });
-          }, 1500);
-          return;
-        }
-        setFeedbackType("ok");
-        setFeedbackMessage(`+${OK_SCORE}`);
+      if (np >= tw.length) {
+        setFeedback("✓ Done!");
+        setFType("ok");
+        setLoading(true);
+        submit().then(() => newRound());
       } else {
-        const newAction = { word, correct: false, timeMs: elapsed, action: "play", timestamp: now };
-        actionLogRef.current = [...actionLogRef.current, newAction];
-        setScore((s) => s - BAD_PENALTY);
-        setFeedbackType("bad");
-        setFeedbackMessage(`Expected "${expected}" -${BAD_PENALTY}`);
+        setFeedback("✓");
+        setFType("ok");
       }
-      busyRef.current = false;
-      setBusy(false);
-    },
-    [progress, targetWords, score, speakWord, submitStats, newRound, OK_SCORE, BAD_PENALTY]
-  );
-
-  const removeFromSentence = useCallback((word) => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setSentence((prev) => {
-      const idx = prev.indexOf(word);
-      if (idx < 0) {
-        busyRef.current = false;
-        return prev;
-      }
-      setHand((h) => [...h, word]);
-      setProgress(idx);
-      actionLogRef.current = [
-        ...actionLogRef.current,
-        { word, correct: false, timeMs: 0, action: "remove", timestamp: performance.now() },
-      ];
-      setFeedbackMessage("");
-      setFeedbackType("");
-      busyRef.current = false;
-      return prev.filter((_, i) => i !== idx);
-    });
-  }, []);
-
-  const clearSentence = useCallback(() => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setHand((prev) => [...prev, ...sentence]);
-    setSentence([]);
-    setProgress(0);
-    setFeedbackMessage("");
-    setFeedbackType("");
-    busyRef.current = false;
-  }, [sentence]);
-
-  const draw = useCallback(() => {
-    if (bank.length === 0 || hand.length >= HAND_MAX) {
-      setTipText(hand.length >= HAND_MAX ? "Hand full" : "Deck empty");
-      return;
+    } else {
+      // ❌ 错误：只说错，不泄露答案
+      logRef.current.push({ w: word, ok: false, t: ms, act: "play", ts: now });
+      setScore(s => s - BAD);
+      setFeedback("✗ Wrong");
+      setFType("bad");
     }
-    setBank((prev) => {
-      const copy = [...prev];
-      const word = copy.pop();
-      setHand((h) => [...h, word]);
-      return copy;
+  }
+
+  /** 句子区移除回手牌 */
+  function removeSentence(word) {
+    setSentence(prev => {
+      const i = prev.indexOf(word);
+      if (i < 0) return prev;
+      setHand(h => [...h, word]);
+      setProgress(i);
+      setFeedback(""); setFType("");
+      logRef.current.push({ w: word, ok: false, t: 0, act: "remove", ts: performance.now() });
+      return prev.filter((_, j) => j !== i);
     });
-  }, [bank.length, hand.length]);
+  }
+
+  function clearAll() {
+    setHand(h => [...h, ...sentence]);
+    setSentence([]); setProgress(0);
+    setFeedback(""); setFType("");
+  }
+
+  function draw() {
+    setBank(prev => {
+      if (!prev.length) { setTip("Deck empty"); return prev; }
+      if (hand.length >= HMAX) { setTip("Hand full"); return prev; }
+      const c = [...prev];
+      setHand(h => [...h, c.pop()]);
+      return c;
+    });
+  }
 
   return {
-    // state
-    bank,
-    hand,
-    sentence,
-    targetWords,
-    glossary,
-    score,
-    progress,
-    level,
-    busy,
-    isLoading,
-    feedbackMessage,
-    feedbackType,
-    tipText,
-    vocabWords,
-    showVocab,
-    // actions
-    start,
-    playTile,
-    removeFromSentence,
-    clearSentence,
-    draw,
-    speakWord,
-    setShowVocab,
+    bank, hand, sentence, targetWords, glossary,
+    score, progress, level, loading,
+    feedback, fType, tip,
+    vocab, showVocab, setShowVocab,
+    start, tap, removeSentence, clearAll, draw, speak,
   };
 }
