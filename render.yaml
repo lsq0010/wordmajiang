@@ -1,9 +1,11 @@
 services:
   - type: web
     name: wordmajiang
+    plan: free
     env: node
     buildCommand: cd client && npm install && npm run build && cd ..
     startCommand: node server.js
+    autoDeploy: true
     envVars:
       - key: DEEPSEEK_API_KEY
         sync: false
