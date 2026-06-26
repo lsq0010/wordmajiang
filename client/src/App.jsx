@@ -31,7 +31,6 @@ export default function App() {
     if (token) g.start();
   }, [token]);
 
-  useEffect(() => { setShowCn(true); }, [g.sentenceCn]);
   useEffect(() => {
     if (g.feedback === "✓ Done!") setFirstRound(false);
   }, [g.feedback]);
