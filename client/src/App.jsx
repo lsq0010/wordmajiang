@@ -81,7 +81,7 @@ export default function App() {
         {g.feedback && <div className={`feedback ${g.fType}`}>{g.feedback}</div>}
 
         <div className="section">
-          <span className="label">Your Hand</span>
+          <span className="label">· {g.sentenceCn || ""}</span>
           {g.reason && <div className="reason">• {g.reason}</div>}
           <div className="tiles">
             {g.hand.map((w, i) => (

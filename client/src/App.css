@@ -75,7 +75,7 @@ html, body, #root { height: 100%; overflow: hidden; }
 .muted { color: var(--muted2); font-size: 13px; padding: 16px 0; }
 
 /* Reason */
-.reason { font-size: 10px; color: #999; text-align: left; padding: 0 0 6px 0; }
+.reason { font-size: 10px; color: var(--muted); text-align: left; padding: 0 0 6px 0; }
 
 /* Feedback */
 .feedback { font-size: 13px; text-align: center; min-height: 18px; }
