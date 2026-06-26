@@ -4,7 +4,7 @@ services:
     plan: free
     branch: main
     env: node
-    buildCommand: cd client && npm install && npm run build && cd ..
+    buildCommand: npm install && cd client && npm install && npm run build
     startCommand: node server.js
     autoDeploy: true
     envVars:
