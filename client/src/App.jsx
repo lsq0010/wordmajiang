@@ -29,6 +29,7 @@ export default function App() {
 
   useEffect(() => {
     if (token) g.start();
+    else setLogoutOpen(false);
   }, [token]);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function App() {
   }, [showCn]);
 
   const handleAuth = (t, user) => {
+    setLogoutOpen(false);
     saveAuth(t, user);
     setToken(t);
   };
