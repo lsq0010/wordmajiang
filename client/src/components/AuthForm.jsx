@@ -48,7 +48,6 @@ export default function AuthForm({ onAuth }) {
             placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            autoFocus
           />
           <input
             className="auth-input"
