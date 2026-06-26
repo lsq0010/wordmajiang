@@ -4,4 +4,6 @@ client/node_modules/
 .DS_Store
 .userdata.json
 .userdata.db
+.userdata.db-shm
+.userdata.db-wal
 client/dist/
