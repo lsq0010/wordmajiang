@@ -10,9 +10,5 @@ services:
     envVars:
       - key: DEEPSEEK_API_KEY
         sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: NODE_OPTIONS
-        value: "--dns-result-order=ipv4first"
       - key: PORT
         value: "3000"

@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { charBank } from "./chars.js";
-import { initDb, ensureUser, saveUser, saveWord, addResult, createUser, findUserByUsername, getUserCount } from "./db.js";
+import { ensureUser, saveUser, saveWord, addResult, createUser, findUserByUsername, getUserCount } from "./db.js";
 import { hashPassword, comparePassword, signToken, requireAuth } from "./auth.js";
 
 dotenv.config({ override: true });
@@ -18,7 +18,7 @@ const round2 = (n) => Math.round(n * 100) / 100;
 
 // ========== 认证路由 ==========
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", (req, res) => {
   const { username, password } = req.body || {};
   if (!username || typeof username !== "string" || username.trim().length < 3 || username.trim().length > 20) {
     return res.status(400).json({ error: "Username must be 3-20 characters" });
@@ -27,21 +27,21 @@ app.post("/api/auth/register", async (req, res) => {
   if (!pwd || typeof pwd !== "string" || pwd.length < 6) {
     return res.status(400).json({ error: "Password must be at least 6 characters" });
   }
-  const u = await findUserByUsername(username.trim());
+  const u = findUserByUsername(username.trim());
   if (u) return res.status(409).json({ error: "Username already taken" });
   const hash = hashPassword(pwd);
-  const user = await createUser(username.trim(), hash);
+  const user = createUser(username.trim(), hash);
   const token = signToken(user.id);
   res.json({ token, user: { id: user.id, username: user.username, level: user.level } });
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password required" });
   }
-  const u = await findUserByUsername(username.trim());
-  try { const c = await getUserCount(); console.log(`LOGIN: user="${username.trim()}" found=${!!u} totalUsers=${c}`); } catch {}
+  const u = findUserByUsername(username.trim());
+  try { const c = getUserCount(); console.log(`LOGIN: user="${username.trim()}" found=${!!u} totalUsers=${c}`); } catch {}
   if (!u || !comparePassword(password.trim(), u.passwordHash)) {
     return res.status(401).json({ error: "Invalid username or password" });
   }
@@ -58,15 +58,15 @@ app.get("/api/bank", (req, res) => {
 });
 
 // 获取当前用户数据
-app.get("/api/model", requireAuth, async (req, res) => {
-  const u = await ensureUser(req.userId);
+app.get("/api/model", requireAuth, (req, res) => {
+  const u = ensureUser(req.userId);
   res.json(u);
 });
 
 // 智能出题
 app.post("/api/deal", requireAuth, async (req, res) => {
   const userId = req.userId;
-  const userData = await ensureUser(userId);
+  const userData = ensureUser(userId);
   const { score } = req.body || {};
   if (typeof score === "number" && score !== userData.totalScore) {
     userData.totalScore = score;
@@ -177,10 +177,10 @@ app.post("/api/deal", requireAuth, async (req, res) => {
       glossary[k].mastery = f.mastery ?? 0;
     });
 
-    await saveUser(userId, userData);
+    saveUser(userId, userData);
     for (const w of words) {
       const k = w.toLowerCase();
-      await saveWord(userId, k, userData.wordFamiliarity[k]);
+      saveWord(userId, k, userData.wordFamiliarity[k]);
     }
 
     const newWords = words.filter(w => {
@@ -213,7 +213,7 @@ app.post("/api/deal", requireAuth, async (req, res) => {
 });
 
 // 接收答题数据
-app.post("/api/stats", requireAuth, async (req, res) => {
+app.post("/api/stats", requireAuth, (req, res) => {
   const userId = req.userId;
 
   const { words, totalTimeMs } = req.body;
@@ -221,7 +221,7 @@ app.post("/api/stats", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "Invalid data" });
   }
 
-  const userData = await ensureUser(userId);
+  const userData = ensureUser(userId);
 
   const correctCount = words.filter(w => w.correct).length;
   const avgTime = totalTimeMs
@@ -242,7 +242,7 @@ app.post("/api/stats", requireAuth, async (req, res) => {
     else if (w.action === "remove") { f.removed = (f.removed || 0) + 1; }
     else { f.wrong++; f.mastery = round2(Math.max(0, f.mastery - 0.3)); }
     if (w.timeMs > 0) f.totalTime += w.timeMs;
-    await saveWord(userId, k, f);
+    saveWord(userId, k, f);
   }
 
   const totalScore = Object.values(userData.wordFamiliarity).reduce((s, f) => s + (f.mastery || 0), 0);
@@ -251,16 +251,15 @@ app.post("/api/stats", requireAuth, async (req, res) => {
   userData.recentResults.push({ correct: correctCount, total: words.length, avgTimeMs: avgTime });
   if (userData.recentResults.length > 20) userData.recentResults.shift();
 
-  await saveUser(userId, userData);
-  await addResult(userId, correctCount, words.length, avgTime);
+  saveUser(userId, userData);
+  addResult(userId, correctCount, words.length, avgTime);
 
   res.json({ level: userData.level, totalSentences: userData.totalSentences });
 });
 
 const PORT = process.env.PORT || 3000;
 try {
-  await initDb();
-  const startCount = await getUserCount();
+  const startCount = getUserCount();
   console.log(`DB ready, users: ${startCount}`);
 } catch (e) {
   console.error(`DB init failed: ${e.message}`);
