@@ -90,8 +90,14 @@ export default function App() {
         {g.feedback && <div className={`feedback ${g.fType}`}>{g.feedback}</div>}
 
         <div className="section">
-          <span className="label" onClick={() => setShowCn(!showCn)} style={{cursor:"pointer"}}>· {g.sentenceCn ? (showCn ? g.sentenceCn : "***") : ""}</span>
-          {g.reason && <div className="reason">• {g.reason}{g.tip && !g.feedback ? ' · ' + g.tip : ''}</div>}
+          <div className="reason">
+            {g.reason ? '• ' + g.reason : ''}
+            {g.reason && g.sentenceCn ? ' · ' : ''}
+            <span onClick={() => setShowCn(!showCn)} style={{cursor:"pointer"}}>
+              {g.sentenceCn ? (showCn ? g.sentenceCn : "***") : ''}
+            </span>
+            {g.tip && !g.feedback ? ' · ' + g.tip : ''}
+          </div>
           <div className="tiles">
             {g.hand.map((w, i) => (
               <WordTile key={`h-${i}-${w}`} word={w} glossary={g.getGlossary(w)}
