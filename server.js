@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { charBank } from "./chars.js";
-import { ensureUser, saveUser, saveWord, addResult, createUser, findUserByUsername } from "./db.js";
+import { initDb, ensureUser, saveUser, saveWord, addResult, createUser, findUserByUsername, getUserCount } from "./db.js";
 import { hashPassword, comparePassword, signToken, requireAuth } from "./auth.js";
 
 dotenv.config({ override: true });
@@ -18,7 +18,7 @@ const round2 = (n) => Math.round(n * 100) / 100;
 
 // ========== 认证路由 ==========
 
-app.post("/api/auth/register", (req, res) => {
+app.post("/api/auth/register", async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || typeof username !== "string" || username.trim().length < 3 || username.trim().length > 20) {
     return res.status(400).json({ error: "Username must be 3-20 characters" });
@@ -27,21 +27,22 @@ app.post("/api/auth/register", (req, res) => {
   if (!pwd || typeof pwd !== "string" || pwd.length < 6) {
     return res.status(400).json({ error: "Password must be at least 6 characters" });
   }
-  const u = findUserByUsername(username.trim());
+  const u = await findUserByUsername(username.trim());
   if (u) return res.status(409).json({ error: "Username already taken" });
   const hash = hashPassword(pwd);
-  const user = createUser(username.trim(), hash);
+  const user = await createUser(username.trim(), hash);
   const token = signToken(user.id);
   res.json({ token, user: { id: user.id, username: user.username, level: user.level } });
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password required" });
   }
-  const u = findUserByUsername(username.trim());
-  console.log(`LOGIN: user="${username.trim()}" found=${!!u} totalUsers=${getUserCount()}`);
+  const u = await findUserByUsername(username.trim());
+  const count = await getUserCount();
+  console.log(`LOGIN: user="${username.trim()}" found=${!!u} totalUsers=${count}`);
   if (!u || !comparePassword(password.trim(), u.passwordHash)) {
     return res.status(401).json({ error: "Invalid username or password" });
   }
@@ -58,15 +59,15 @@ app.get("/api/bank", (req, res) => {
 });
 
 // 获取当前用户数据
-app.get("/api/model", requireAuth, (req, res) => {
-  const u = ensureUser(req.userId);
+app.get("/api/model", requireAuth, async (req, res) => {
+  const u = await ensureUser(req.userId);
   res.json(u);
 });
 
 // 智能出题
 app.post("/api/deal", requireAuth, async (req, res) => {
   const userId = req.userId;
-  const userData = ensureUser(userId);
+  const userData = await ensureUser(userId);
   const { score } = req.body || {};
   if (typeof score === "number" && score !== userData.totalScore) {
     userData.totalScore = score;
@@ -177,12 +178,11 @@ app.post("/api/deal", requireAuth, async (req, res) => {
       glossary[k].mastery = f.mastery ?? 0;
     });
 
-    // 持久化用户数据
-    saveUser(userId, userData);
-    words.forEach(w => {
+    await saveUser(userId, userData);
+    for (const w of words) {
       const k = w.toLowerCase();
-      saveWord(userId, k, userData.wordFamiliarity[k]);
-    });
+      await saveWord(userId, k, userData.wordFamiliarity[k]);
+    }
 
     const newWords = words.filter(w => {
       const f = userData.wordFamiliarity[w.toLowerCase()];
@@ -214,7 +214,7 @@ app.post("/api/deal", requireAuth, async (req, res) => {
 });
 
 // 接收答题数据
-app.post("/api/stats", requireAuth, (req, res) => {
+app.post("/api/stats", requireAuth, async (req, res) => {
   const userId = req.userId;
 
   const { words, totalTimeMs } = req.body;
@@ -222,14 +222,14 @@ app.post("/api/stats", requireAuth, (req, res) => {
     return res.status(400).json({ error: "Invalid data" });
   }
 
-  const userData = ensureUser(userId);
+  const userData = await ensureUser(userId);
 
   const correctCount = words.filter(w => w.correct).length;
   const avgTime = totalTimeMs
     ? totalTimeMs / words.length
     : words.reduce((s, w) => s + (w.timeMs || 0), 0) / words.length;
 
-  words.forEach(w => {
+  for (const w of words) {
     const k = w.word.toLowerCase();
     if (!userData.wordFamiliarity[k]) {
       userData.wordFamiliarity[k] = {
@@ -243,8 +243,8 @@ app.post("/api/stats", requireAuth, (req, res) => {
     else if (w.action === "remove") { f.removed = (f.removed || 0) + 1; }
     else { f.wrong++; f.mastery = round2(Math.max(0, f.mastery - 0.3)); }
     if (w.timeMs > 0) f.totalTime += w.timeMs;
-    saveWord(userId, k, f);
-  });
+    await saveWord(userId, k, f);
+  }
 
   const totalScore = Object.values(userData.wordFamiliarity).reduce((s, f) => s + (f.mastery || 0), 0);
   userData.totalScore = totalScore;
@@ -252,15 +252,15 @@ app.post("/api/stats", requireAuth, (req, res) => {
   userData.recentResults.push({ correct: correctCount, total: words.length, avgTimeMs: avgTime });
   if (userData.recentResults.length > 20) userData.recentResults.shift();
 
-  saveUser(userId, userData);
-  addResult(userId, correctCount, words.length, avgTime);
+  await saveUser(userId, userData);
+  await addResult(userId, correctCount, words.length, avgTime);
 
   res.json({ level: userData.level, totalSentences: userData.totalSentences });
 });
 
-import { getUserCount } from "./db.js";
-
 const PORT = process.env.PORT || 3000;
+await initDb();
+const startCount = await getUserCount();
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`文字麻将已启动: http://localhost:${PORT} (users: ${getUserCount()})`);
+  console.log(`文字麻将已启动: http://localhost:${PORT} (users: ${startCount})`);
 });

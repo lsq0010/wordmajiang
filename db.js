@@ -1,153 +1,159 @@
-import Database from "better-sqlite3";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import pkg from "pg";
+const { Pool } = pkg;
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = join(__dirname, ".userdata.db");
-
-const db = new Database(DB_PATH);
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    username TEXT UNIQUE,
-    password_hash TEXT,
-    level INTEGER DEFAULT 1,
-    total_sentences INTEGER DEFAULT 0,
-    created_at INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS words (
-    user_id TEXT NOT NULL REFERENCES users(id),
-    word TEXT NOT NULL,
-    cn TEXT,
-    ipa TEXT,
-    note TEXT,
-    seen INTEGER DEFAULT 0,
-    correct INTEGER DEFAULT 0,
-    wrong INTEGER DEFAULT 0,
-    removed INTEGER DEFAULT 0,
-    total_time INTEGER DEFAULT 0,
-    mastery REAL DEFAULT 0,
-    PRIMARY KEY(user_id, word)
-  );
-  CREATE TABLE IF NOT EXISTS results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL REFERENCES users(id),
-    correct INTEGER NOT NULL,
-    total INTEGER NOT NULL,
-    avg_time_ms REAL NOT NULL,
-    created_at INTEGER NOT NULL
-  );
-`);
-
-// 兼容旧表：尝试加列
-for (const col of ["username", "password_hash"]) {
-  try { db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`); } catch {}
+let pool;
+function getPool() {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+  }
+  return pool;
 }
 
-// 修复浮点数精度：将已有 mastery 四舍五入到 2 位小数
-db.exec("UPDATE words SET mastery = ROUND(mastery, 2) WHERE mastery != ROUND(mastery, 2)");
+let tablesReady = false;
+async function ensureTables() {
+  if (tablesReady) return;
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE,
+      password_hash TEXT,
+      level INTEGER DEFAULT 1,
+      total_sentences INTEGER DEFAULT 0,
+      created_at BIGINT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS words (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      word TEXT NOT NULL,
+      cn TEXT,
+      ipa TEXT,
+      note TEXT,
+      seen INTEGER DEFAULT 0,
+      correct INTEGER DEFAULT 0,
+      wrong INTEGER DEFAULT 0,
+      removed INTEGER DEFAULT 0,
+      total_time INTEGER DEFAULT 0,
+      mastery DOUBLE PRECISION DEFAULT 0,
+      PRIMARY KEY(user_id, word)
+    );
+    CREATE TABLE IF NOT EXISTS results (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      correct INTEGER NOT NULL,
+      total INTEGER NOT NULL,
+      avg_time_ms DOUBLE PRECISION NOT NULL,
+      created_at BIGINT NOT NULL
+    );
+  `);
+  tablesReady = true;
+}
 
-// prepared statements
-const stmGetUser = db.prepare("SELECT * FROM users WHERE id = ?");
-const stmGetUserByUsername = db.prepare("SELECT * FROM users WHERE username = ?");
-const stmInsertUser = db.prepare(
-  "INSERT INTO users (id, username, password_hash, level, total_sentences, created_at) VALUES (?, ?, ?, 1, 0, ?)"
-);
-const stmUpsertUser = db.prepare(
-  "INSERT INTO users (id, username, password_hash, level, total_sentences, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET level = excluded.level, total_sentences = excluded.total_sentences"
-);
-const stmGetWords = db.prepare("SELECT * FROM words WHERE user_id = ?");
-const stmUpsertWord = db.prepare(
-  "INSERT INTO words (user_id, word, cn, ipa, note, seen, correct, wrong, removed, total_time, mastery) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, word) DO UPDATE SET cn = excluded.cn, ipa = excluded.ipa, note = excluded.note, seen = excluded.seen, correct = excluded.correct, wrong = excluded.wrong, removed = excluded.removed, total_time = excluded.total_time, mastery = excluded.mastery"
-);
-const stmAddResult = db.prepare(
-  "INSERT INTO results (user_id, correct, total, avg_time_ms, created_at) VALUES (?, ?, ?, ?, ?)"
-);
-const stmRecentResults = db.prepare(
-  "SELECT * FROM results WHERE user_id = ? ORDER BY id DESC LIMIT 20"
-);
-const stmTotalScore = db.prepare(
-  "SELECT COALESCE(SUM(mastery), 0) AS score FROM words WHERE user_id = ?"
-);
-const stmUserCount = db.prepare("SELECT COUNT(*) AS count FROM users");
+export async function initDb() { await ensureTables(); }
 
-export function createUser(username, passwordHash) {
+export async function createUser(username, passwordHash) {
   const id = crypto.randomUUID();
-  stmInsertUser.run(id, username, passwordHash, Date.now());
+  await getPool().query(
+    "INSERT INTO users (id, username, password_hash, level, total_sentences, created_at) VALUES ($1, $2, $3, 1, 0, $4)",
+    [id, username, passwordHash, Date.now()]
+  );
   return { id, username, level: 1, totalSentences: 0, totalScore: 0, wordFamiliarity: {}, recentResults: [] };
 }
 
-export function findUserByUsername(username) {
-  const u = stmGetUserByUsername.get(username);
+export async function findUserByUsername(username) {
+  const { rows } = await getPool().query("SELECT * FROM users WHERE username = $1", [username]);
+  const u = rows[0];
   if (!u) return null;
+  const { rows: wrows } = await getPool().query("SELECT * FROM words WHERE user_id = $1", [u.id]);
   const words = {};
-  for (const w of stmGetWords.all(u.id)) {
+  for (const w of wrows) {
     words[w.word] = {
       seen: w.seen, correct: w.correct, wrong: w.wrong, removed: w.removed,
       totalTime: w.total_time, mastery: w.mastery,
       cn: w.cn, ipa: w.ipa, note: w.note,
     };
   }
-  const recent = stmRecentResults.all(u.id).map(r => ({
+  const { rows: rrows } = await getPool().query(
+    "SELECT * FROM results WHERE user_id = $1 ORDER BY id DESC LIMIT 20", [u.id]
+  );
+  const recent = rrows.map(r => ({
     correct: r.correct, total: r.total, avgTimeMs: r.avg_time_ms,
   }));
-  const totalScore = stmTotalScore.get(u.id).score;
+  const { rows: srows } = await getPool().query(
+    "SELECT COALESCE(SUM(mastery), 0) AS score FROM words WHERE user_id = $1", [u.id]
+  );
   return {
     id: u.id, username: u.username, level: u.level,
-    totalSentences: u.total_sentences, totalScore,
+    totalSentences: u.total_sentences, totalScore: Number(srows[0].score),
     wordFamiliarity: words, recentResults: recent,
     passwordHash: u.password_hash,
   };
 }
 
-export function ensureUser(userId) {
-  const u = stmGetUser.get(userId);
+export async function ensureUser(userId) {
+  const { rows } = await getPool().query("SELECT * FROM users WHERE id = $1", [userId]);
+  const u = rows[0];
   if (!u) {
-    stmUpsertUser.run(userId, null, null, 1, 0, Date.now());
+    await getPool().query(
+      "INSERT INTO users (id, username, password_hash, level, total_sentences, created_at) VALUES ($1, NULL, NULL, 1, 0, $2) ON CONFLICT(id) DO NOTHING",
+      [userId, Date.now()]
+    );
     return { level: 1, totalSentences: 0, totalScore: 0, wordFamiliarity: {}, recentResults: [] };
   }
+  const { rows: wrows } = await getPool().query("SELECT * FROM words WHERE user_id = $1", [userId]);
   const words = {};
-  for (const w of stmGetWords.all(userId)) {
+  for (const w of wrows) {
     words[w.word] = {
       seen: w.seen, correct: w.correct, wrong: w.wrong, removed: w.removed,
       totalTime: w.total_time, mastery: w.mastery,
       cn: w.cn, ipa: w.ipa, note: w.note,
     };
   }
-  const recent = stmRecentResults.all(userId).map(r => ({
+  const { rows: rrows } = await getPool().query(
+    "SELECT * FROM results WHERE user_id = $1 ORDER BY id DESC LIMIT 20", [userId]
+  );
+  const recent = rrows.map(r => ({
     correct: r.correct, total: r.total, avgTimeMs: r.avg_time_ms,
   }));
-  const totalScore = stmTotalScore.get(userId).score;
-  return { level: u.level, totalSentences: u.total_sentences, totalScore, wordFamiliarity: words, recentResults: recent };
+  const { rows: srows } = await getPool().query(
+    "SELECT COALESCE(SUM(mastery), 0) AS score FROM words WHERE user_id = $1", [userId]
+  );
+  return {
+    level: u.level, totalSentences: u.total_sentences,
+    totalScore: Number(srows[0].score), wordFamiliarity: words, recentResults: recent,
+  };
 }
 
-export function saveUser(userId, data) {
-  stmUpsertUser.run(userId, null, null, data.level, data.totalSentences, Date.now());
-}
-
-export function saveWord(userId, word, f) {
-  stmUpsertWord.run(
-    userId, word, f.cn || null, f.ipa || null, f.note || null,
-    f.seen || 0, f.correct || 0, f.wrong || 0, f.removed || 0,
-    f.totalTime || 0, f.mastery ?? 0
+export async function saveUser(userId, data) {
+  await getPool().query(
+    "INSERT INTO users (id, username, password_hash, level, total_sentences, created_at) VALUES ($1, NULL, NULL, $2, $3, $4) ON CONFLICT(id) DO UPDATE SET level = EXCLUDED.level, total_sentences = EXCLUDED.total_sentences",
+    [userId, data.level, data.totalSentences, Date.now()]
   );
 }
 
-export function addResult(userId, correct, total, avgTimeMs) {
-  stmAddResult.run(userId, correct, total, avgTimeMs, Date.now());
+export async function saveWord(userId, word, f) {
+  await getPool().query(
+    `INSERT INTO words (user_id, word, cn, ipa, note, seen, correct, wrong, removed, total_time, mastery)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT(user_id, word) DO UPDATE SET
+       cn = EXCLUDED.cn, ipa = EXCLUDED.ipa, note = EXCLUDED.note,
+       seen = EXCLUDED.seen, correct = EXCLUDED.correct, wrong = EXCLUDED.wrong,
+       removed = EXCLUDED.removed, total_time = EXCLUDED.total_time, mastery = EXCLUDED.mastery`,
+    [userId, word, f.cn || null, f.ipa || null, f.note || null,
+     f.seen || 0, f.correct || 0, f.wrong || 0, f.removed || 0,
+     f.totalTime || 0, f.mastery ?? 0]
+  );
 }
 
-export function getRecentResults(userId) {
-  return stmRecentResults.all(userId).map(r => ({
-    correct: r.correct, total: r.total, avgTimeMs: r.avg_time_ms,
-  }));
+export async function addResult(userId, correct, total, avgTimeMs) {
+  await getPool().query(
+    "INSERT INTO results (user_id, correct, total, avg_time_ms, created_at) VALUES ($1, $2, $3, $4, $5)",
+    [userId, correct, total, avgTimeMs, Date.now()]
+  );
 }
 
-export function getUserCount() {
-  return stmUserCount.get().count;
+export async function getUserCount() {
+  const { rows } = await getPool().query("SELECT COUNT(*) AS count FROM users");
+  return Number(rows[0].count);
 }
-
-export default db;
