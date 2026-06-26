@@ -63,7 +63,7 @@ export default function App() {
 
       <div className="main-area">
         {g.loading ? (
-          <div className="loading">像滚雪球一样增加词汇量...</div>
+          <div className="loading">像滚雪球一样增加词汇...</div>
         ) : (<>
         {g.sentenceCn && (
           <div className="target">
