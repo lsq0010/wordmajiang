@@ -91,7 +91,7 @@ export default function App() {
 
         <div className="section">
           <span className="label" onClick={() => setShowCn(!showCn)} style={{cursor:"pointer"}}>· {g.sentenceCn ? (showCn ? g.sentenceCn : "***") : ""}</span>
-          {g.reason && <div className="reason">• {g.reason}</div>}
+          {g.reason && <div className="reason">• {g.reason}{g.tip && !g.feedback ? ' · ' + g.tip : ''}</div>}
           <div className="tiles">
             {g.hand.map((w, i) => (
               <WordTile key={`h-${i}-${w}`} word={w} glossary={g.getGlossary(w)}
@@ -106,7 +106,7 @@ export default function App() {
           </div>
         )}
 
-        {g.tip && !g.feedback && <span className="tip">{g.tip}</span>}
+        {g.tip && !g.feedback && !g.reason && <span className="tip">{g.tip}</span>}
         </>)}
       </div>
 
