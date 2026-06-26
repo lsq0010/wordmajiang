@@ -43,20 +43,14 @@ async function ensureTables() {
   `);
 }
 
+import dns from "dns";
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
+const dnsResolve4 = dns.promises.resolve4;
+
 async function resolve4(hostname) {
-  // Try Google DNS-over-HTTPS to get IPv4, bypassing Render's local DNS
   try {
-    const r = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=A`);
-    const d = await r.json();
-    if (d.Answer?.length) return d.Answer[0].data;
-  } catch {}
-  // Fallback: try Cloudflare DoH
-  try {
-    const r = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostname)}&type=A`, {
-      headers: { Accept: "application/dns-json" },
-    });
-    const d = await r.json();
-    if (d.Answer?.length) return d.Answer[0].data;
+    const ips = await dnsResolve4(hostname);
+    if (ips.length) return ips[0];
   } catch {}
   return null;
 }
