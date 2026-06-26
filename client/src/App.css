@@ -130,7 +130,7 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
 /* Auth */
 .auth-page {
   display: flex; align-items: center; justify-content: center;
-  height: 100dvh; padding: 20px;
+  height: 100dvh; max-height: 100dvh; overflow: hidden; padding: 20px;
 }
 .auth-card {
   width: 100%; max-width: 320px; text-align: center;
