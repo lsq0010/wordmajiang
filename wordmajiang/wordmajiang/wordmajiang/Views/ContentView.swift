@@ -16,11 +16,15 @@ struct WebViewWrapper: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = UIColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
         webView.scrollView.backgroundColor = UIColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.bounces = false
+        webView.scrollView.alwaysBounceHorizontal = false
+        webView.scrollView.alwaysBounceVertical = false
 
         #if targetEnvironment(simulator)
         let url = URL(string: "http://localhost:3000")!
         #else
-        let url = URL(string: "http://172.17.38.29:3000")!
+        let url = URL(string: "https://wordmajiang.onrender.com")!
         #endif
         webView.load(URLRequest(url: url))
         return webView
