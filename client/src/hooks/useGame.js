@@ -35,6 +35,7 @@ export function useGame() {
   }, []);
 
   const fetchModel = useCallback(async () => {
+    let savedScore = 0;
     try {
       const r = await fetch("/api/model");
       const d = await r.json();
@@ -47,7 +48,12 @@ export function useGame() {
             return { word: w, seen: f.seen, ok: f.correct || 0, cls: a >= .9 && t < 2000 ? "m" : a >= .7 ? "f" : "w" };
           }).sort((a, b) => ({ w: 0, f: 1, m: 2 })[a.cls] - ({ w: 0, f: 1, m: 2 })[b.cls]));
       }
+      if (typeof d.totalScore === "number") {
+        setScore(d.totalScore);
+        savedScore = d.totalScore;
+      }
     } catch {}
+    return savedScore;
   }, []);
 
   const submit = useCallback(async (currentScore) => {
@@ -78,10 +84,11 @@ export function useGame() {
   }, []);
 
   const start = useCallback(async () => {
-    setScore(0); setLevel(1); setHand([]); setSentence([]); setTargetWords([]);
+    setHand([]); setSentence([]); setTargetWords([]);
     setGlossary({}); logRef.current = [];
     setFeedback(""); setFType(""); setTip("");
-    await fetchModel(); await newRound(0);
+    const savedScore = await fetchModel(); // 从后端加载分数和等级
+    await newRound(savedScore);
   }, [fetchModel, newRound]);
 
   /** 点手牌 */
