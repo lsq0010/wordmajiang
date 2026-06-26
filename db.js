@@ -1,4 +1,3 @@
-import { lookup } from "dns/promises";
 import pkg from "pg";
 const { Pool } = pkg;
 
@@ -9,9 +8,7 @@ function getPool() {
   return pool;
 }
 
-let tablesReady = false;
 async function ensureTables() {
-  if (tablesReady) return;
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -44,28 +41,17 @@ async function ensureTables() {
       created_at BIGINT NOT NULL
     );
   `);
-  tablesReady = true;
 }
 
 export async function initDb() {
-  const url = new URL(process.env.DATABASE_URL || "postgresql://localhost");
-  const hostname = url.hostname;
-  let addr = hostname;
-  try {
-    const { address } = await lookup(hostname, { family: 4 });
-    addr = address;
-  } catch (e) {
-    console.warn(`DNS lookup failed for ${hostname}: ${e.message}, using hostname`);
-  }
-  console.log(`DB connecting: ${url.username}@${addr}:${url.port}/${url.pathname.replace("/", "")}`);
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) throw new Error("DATABASE_URL not configured");
+  const url = new URL(dbUrl);
+  console.log(`DB connecting: ${url.username}@${url.hostname}:${url.port}${url.pathname}`);
   pool = new Pool({
-    host: addr,
-    port: parseInt(url.port || "5432"),
-    database: url.pathname.replace("/", "") || "postgres",
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
+    connectionString: dbUrl,
     ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 15000,
   });
   pool.on("error", (e) => console.error("DB pool error:", e.message));
   await ensureTables();
