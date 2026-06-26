@@ -47,6 +47,9 @@ for (const col of ["username", "password_hash"]) {
   try { db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`); } catch {}
 }
 
+// 修复浮点数精度：将已有 mastery 四舍五入到 2 位小数
+db.exec("UPDATE words SET mastery = ROUND(mastery, 2) WHERE mastery != ROUND(mastery, 2)");
+
 // prepared statements
 const stmGetUser = db.prepare("SELECT * FROM users WHERE id = ?");
 const stmGetUserByUsername = db.prepare("SELECT * FROM users WHERE username = ?");
