@@ -3,7 +3,8 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { charBank } from "./chars.js";
-import { ensureUser, saveUser, saveWord, addResult, getRecentResults } from "./db.js";
+import { ensureUser, saveUser, saveWord, addResult, createUser, findUserByUsername } from "./db.js";
+import { hashPassword, comparePassword, signToken, requireAuth } from "./auth.js";
 
 dotenv.config({ override: true });
 
@@ -14,9 +15,38 @@ app.use(express.static(join(__dirname, "client", "dist")));
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
-function getUserId(req) {
-  return req.headers["x-user-id"] || null;
-}
+// ========== 认证路由 ==========
+
+app.post("/api/auth/register", (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || typeof username !== "string" || username.trim().length < 3 || username.trim().length > 20) {
+    return res.status(400).json({ error: "Username must be 3-20 characters" });
+  }
+  if (!password || typeof password !== "string" || password.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters" });
+  }
+  const u = findUserByUsername(username.trim());
+  if (u) return res.status(409).json({ error: "Username already taken" });
+  const hash = hashPassword(password);
+  const user = createUser(username.trim(), hash);
+  const token = signToken(user.id);
+  res.json({ token, user: { id: user.id, username: user.username, level: user.level } });
+});
+
+app.post("/api/auth/login", (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password required" });
+  }
+  const u = findUserByUsername(username.trim());
+  if (!u || !comparePassword(password, u.passwordHash)) {
+    return res.status(401).json({ error: "Invalid username or password" });
+  }
+  const token = signToken(u.id);
+  res.json({ token, user: { id: u.id, username: u.username, level: u.level } });
+});
+
+// ========== API（需登录） ==========
 
 // 提供字库
 app.get("/api/bank", (req, res) => {
@@ -25,18 +55,14 @@ app.get("/api/bank", (req, res) => {
 });
 
 // 获取当前用户数据
-app.get("/api/model", (req, res) => {
-  const userId = getUserId(req);
-  if (!userId) return res.status(400).json({ error: "Missing X-User-Id" });
-  const u = ensureUser(userId);
+app.get("/api/model", requireAuth, (req, res) => {
+  const u = ensureUser(req.userId);
   res.json(u);
 });
 
 // 智能出题
-app.post("/api/deal", async (req, res) => {
-  const userId = getUserId(req);
-  if (!userId) return res.status(400).json({ error: "Missing X-User-Id" });
-
+app.post("/api/deal", requireAuth, async (req, res) => {
+  const userId = req.userId;
   const userData = ensureUser(userId);
   const { score } = req.body || {};
   if (typeof score === "number" && score !== userData.totalScore) {
@@ -185,9 +211,8 @@ app.post("/api/deal", async (req, res) => {
 });
 
 // 接收答题数据
-app.post("/api/stats", (req, res) => {
-  const userId = getUserId(req);
-  if (!userId) return res.status(400).json({ error: "Missing X-User-Id" });
+app.post("/api/stats", requireAuth, (req, res) => {
+  const userId = req.userId;
 
   const { words, totalTimeMs } = req.body;
   if (!Array.isArray(words) || words.length === 0) {

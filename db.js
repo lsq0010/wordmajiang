@@ -12,6 +12,8 @@ db.pragma("foreign_keys = ON");
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
+    username TEXT UNIQUE,
+    password_hash TEXT,
     level INTEGER DEFAULT 1,
     total_sentences INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL
@@ -40,10 +42,19 @@ db.exec(`
   );
 `);
 
+// 兼容旧表：尝试加列
+for (const col of ["username", "password_hash"]) {
+  try { db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`); } catch {}
+}
+
 // prepared statements
 const stmGetUser = db.prepare("SELECT * FROM users WHERE id = ?");
+const stmGetUserByUsername = db.prepare("SELECT * FROM users WHERE username = ?");
+const stmInsertUser = db.prepare(
+  "INSERT INTO users (id, username, password_hash, level, total_sentences, created_at) VALUES (?, ?, ?, 1, 0, ?)"
+);
 const stmUpsertUser = db.prepare(
-  "INSERT INTO users (id, level, total_sentences, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET level = excluded.level, total_sentences = excluded.total_sentences"
+  "INSERT INTO users (id, username, password_hash, level, total_sentences, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET level = excluded.level, total_sentences = excluded.total_sentences"
 );
 const stmGetWords = db.prepare("SELECT * FROM words WHERE user_id = ?");
 const stmUpsertWord = db.prepare(
@@ -59,10 +70,39 @@ const stmTotalScore = db.prepare(
   "SELECT COALESCE(SUM(mastery), 0) AS score FROM words WHERE user_id = ?"
 );
 
+export function createUser(username, passwordHash) {
+  const id = crypto.randomUUID();
+  stmInsertUser.run(id, username, passwordHash, Date.now());
+  return { id, username, level: 1, totalSentences: 0, totalScore: 0, wordFamiliarity: {}, recentResults: [] };
+}
+
+export function findUserByUsername(username) {
+  const u = stmGetUserByUsername.get(username);
+  if (!u) return null;
+  const words = {};
+  for (const w of stmGetWords.all(u.id)) {
+    words[w.word] = {
+      seen: w.seen, correct: w.correct, wrong: w.wrong, removed: w.removed,
+      totalTime: w.total_time, mastery: w.mastery,
+      cn: w.cn, ipa: w.ipa, note: w.note,
+    };
+  }
+  const recent = stmRecentResults.all(u.id).map(r => ({
+    correct: r.correct, total: r.total, avgTimeMs: r.avg_time_ms,
+  }));
+  const totalScore = stmTotalScore.get(u.id).score;
+  return {
+    id: u.id, username: u.username, level: u.level,
+    totalSentences: u.total_sentences, totalScore,
+    wordFamiliarity: words, recentResults: recent,
+    passwordHash: u.password_hash,
+  };
+}
+
 export function ensureUser(userId) {
   const u = stmGetUser.get(userId);
   if (!u) {
-    stmUpsertUser.run(userId, 1, 0, Date.now());
+    stmUpsertUser.run(userId, null, null, 1, 0, Date.now());
     return { level: 1, totalSentences: 0, totalScore: 0, wordFamiliarity: {}, recentResults: [] };
   }
   const words = {};
@@ -81,7 +121,7 @@ export function ensureUser(userId) {
 }
 
 export function saveUser(userId, data) {
-  stmUpsertUser.run(userId, data.level, data.totalSentences, Date.now());
+  stmUpsertUser.run(userId, null, null, data.level, data.totalSentences, Date.now());
 }
 
 export function saveWord(userId, word, f) {
