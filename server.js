@@ -41,6 +41,7 @@ app.post("/api/auth/login", (req, res) => {
     return res.status(400).json({ error: "Username and password required" });
   }
   const u = findUserByUsername(username.trim());
+  console.log(`LOGIN: user="${username.trim()}" found=${!!u} totalUsers=${getUserCount()}`);
   if (!u || !comparePassword(password.trim(), u.passwordHash)) {
     return res.status(401).json({ error: "Invalid username or password" });
   }
@@ -257,7 +258,9 @@ app.post("/api/stats", requireAuth, (req, res) => {
   res.json({ level: userData.level, totalSentences: userData.totalSentences });
 });
 
+import { getUserCount } from "./db.js";
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`文字麻将已启动: http://localhost:${PORT}`);
+  console.log(`文字麻将已启动: http://localhost:${PORT} (users: ${getUserCount()})`);
 });

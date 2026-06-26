@@ -72,6 +72,7 @@ const stmRecentResults = db.prepare(
 const stmTotalScore = db.prepare(
   "SELECT COALESCE(SUM(mastery), 0) AS score FROM words WHERE user_id = ?"
 );
+const stmUserCount = db.prepare("SELECT COUNT(*) AS count FROM users");
 
 export function createUser(username, passwordHash) {
   const id = crypto.randomUUID();
@@ -143,6 +144,10 @@ export function getRecentResults(userId) {
   return stmRecentResults.all(userId).map(r => ({
     correct: r.correct, total: r.total, avgTimeMs: r.avg_time_ms,
   }));
+}
+
+export function getUserCount() {
+  return stmUserCount.get().count;
 }
 
 export default db;
