@@ -50,20 +50,20 @@ export function useGame() {
     } catch {}
   }, []);
 
-  const submit = useCallback(async () => {
+  const submit = useCallback(async (currentScore) => {
     if (!logRef.current.length) return;
     const t = logRef.current.reduce((s, a) => s + (a.t || 0), 0);
     try {
       await fetch("/api/stats", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words: logRef.current.map(a => ({ word: a.w, correct: a.ok, timeMs: a.t || 0, action: a.act || "play", timestamp: a.ts })), totalTimeMs: t, score }) });
+        body: JSON.stringify({ words: logRef.current.map(a => ({ word: a.w, correct: a.ok, timeMs: a.t || 0, action: a.act || "play", timestamp: a.ts })), totalTimeMs: t, score: currentScore }) });
     } catch {}
     fetchModel();
-  }, [score, fetchModel]);
+  }, [fetchModel]);
 
-  const newRound = useCallback(async () => {
+  const newRound = useCallback(async (currentScore) => {
     setLoading(true);
     try {
-      const r = await fetch("/api/deal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ score }) });
+      const r = await fetch("/api/deal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ score: currentScore }) });
       const d = await r.json();
       if (d.error) { setTip("Failed"); setLoading(false); return; }
       const p = [...d.pool], h = [];
@@ -75,13 +75,13 @@ export function useGame() {
       setFeedback(""); setFType(""); setTip("Tap a word");
     } catch { setTip("Network error"); }
     setLoading(false);
-  }, [score]);
+  }, []);
 
   const start = useCallback(async () => {
     setScore(0); setLevel(1); setHand([]); setSentence([]); setTargetWords([]);
     setGlossary({}); logRef.current = [];
     setFeedback(""); setFType(""); setTip("");
-    await fetchModel(); await newRound();
+    await fetchModel(); await newRound(0);
   }, [fetchModel, newRound]);
 
   /** 点手牌 */
@@ -110,7 +110,8 @@ export function useGame() {
         setFeedback("✓ Done!");
         setFType("ok");
         setLoading(true);
-        submit().then(() => newRound());
+        const finalScore = ns;
+        submit(finalScore).then(() => newRound(finalScore));
       } else {
         setFeedback("✓");
         setFType("ok");
