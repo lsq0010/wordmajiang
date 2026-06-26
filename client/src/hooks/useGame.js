@@ -23,13 +23,15 @@ export function useGame() {
   const speakerRef = useRef(null);
 
   const speak = useCallback((w) => {
+    // 异步：丢到事件队列末尾，不阻塞 UI
     setTimeout(() => {
-      const u = speakerRef.current || (speakerRef.current = new SpeechSynthesisUtterance());
-      u.lang = "en-US"; u.rate = 0.85;
-      speechSynthesis.cancel();
-      u.text = w;
-      speechSynthesis.speak(u);
-    }, 20);
+      try {
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(w);
+        u.lang = "en-US"; u.rate = 0.85;
+        speechSynthesis.speak(u);
+      } catch {}
+    }, 0);
   }, []);
 
   const fetchModel = useCallback(async () => {
