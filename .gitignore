@@ -3,3 +3,5 @@ client/node_modules/
 .env
 .DS_Store
 .userdata.json
+.userdata.db
+client/dist/

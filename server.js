@@ -2,8 +2,8 @@ import express from "express";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import fs from "fs";
 import { charBank } from "./chars.js";
+import { ensureUser, saveUser, saveWord, addResult, getRecentResults } from "./db.js";
 
 dotenv.config({ override: true });
 
@@ -14,38 +14,11 @@ app.use(express.static(join(__dirname, "client", "dist")));
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
-// ========== 用户数据持久化 ==========
-const DATA_FILE = join(__dirname, ".userdata.json");
-
-function loadUserData(){
-  try {
-    if(fs.existsSync(DATA_FILE)){
-      const raw = fs.readFileSync(DATA_FILE, "utf-8");
-      return JSON.parse(raw);
-    }
-  } catch(e){ console.error("Failed to load user data:", e.message); }
-  return null;
+function getUserId(req) {
+  return req.headers["x-user-id"] || null;
 }
 
-function saveUserData(){
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(userModel, null, 2), "utf-8");
-  } catch(e){ console.error("Failed to save user data:", e.message); }
-}
-
-let userModel = loadUserData() || {
-  level: 1,
-  totalSentences: 0,
-  totalScore: 0,
-  recentResults: [],
-  wordFamiliarity: {},
-};
-
-console.log(`用户数据已加载: ${userModel.totalSentences}句, 分数${userModel.totalScore}, Lv.${userModel.level}`);
-
-// ========== API ==========
-
-// 提供字库（参考用）
+// 提供字库
 app.get("/api/bank", (req, res) => {
   const level = req.query.level === "advanced" ? "advanced" : "basic";
   res.json({ chars: charBank[level] });
@@ -53,22 +26,30 @@ app.get("/api/bank", (req, res) => {
 
 // 获取当前用户数据
 app.get("/api/model", (req, res) => {
-  res.json(userModel);
+  const userId = getUserId(req);
+  if (!userId) return res.status(400).json({ error: "Missing X-User-Id" });
+  const u = ensureUser(userId);
+  res.json(u);
 });
 
-// 智能出题：把全部用户数据丢给 DeepSeek，让它决定一切
+// 智能出题
 app.post("/api/deal", async (req, res) => {
-  const { score } = req.body || {};
-  if (typeof score === "number") { userModel.totalScore = score; saveUserData(); }
+  const userId = getUserId(req);
+  if (!userId) return res.status(400).json({ error: "Missing X-User-Id" });
 
-  // 把数据压缩成精简摘要发给 DeepSeek
+  const userData = ensureUser(userId);
+  const { score } = req.body || {};
+  if (typeof score === "number" && score !== userData.totalScore) {
+    userData.totalScore = score;
+  }
+
   const summary = {
-    currentLevel: userModel.level,
-    totalSentences: userModel.totalSentences,
-    totalScore: userModel.totalScore,
-    recentPerformance: userModel.recentResults.slice(-10),
+    currentLevel: userData.level,
+    totalSentences: userData.totalSentences,
+    totalScore: userData.totalScore,
+    recentPerformance: (userData.recentResults || []).slice(-10),
     wordStats: Object.fromEntries(
-      Object.entries(userModel.wordFamiliarity)
+      Object.entries(userData.wordFamiliarity || {})
         .sort((a, b) => b[1].seen - a[1].seen)
         .map(([w, f]) => [
           w,
@@ -149,35 +130,37 @@ app.post("/api/deal", async (req, res) => {
       return res.status(502).json({ error: "Sentence too short" });
     }
 
-    // 同步 DeepSeek 判定的等级
     if (Number.isFinite(plan.level) && plan.level >= 1 && plan.level <= 5) {
-      userModel.level = plan.level;
+      userData.level = plan.level;
     }
 
     const glossary = plan.glossary || {};
     words.forEach(w => {
       const k = w.toLowerCase();
       if (!glossary[k]) glossary[k] = { cn: `[${w}]`, ipa: "", note: "" };
-      // 持久化单词信息
-      if (!userModel.wordFamiliarity[k]) {
-        userModel.wordFamiliarity[k] = { seen: 0, correct: 0, wrong: 0, removed: 0, totalTime: 0, mastery: 0 };
+      if (!userData.wordFamiliarity[k]) {
+        userData.wordFamiliarity[k] = { seen: 0, correct: 0, wrong: 0, removed: 0, totalTime: 0, mastery: 0 };
       }
-      const f = userModel.wordFamiliarity[k];
+      const f = userData.wordFamiliarity[k];
       f.cn = glossary[k].cn || f.cn;
       f.ipa = glossary[k].ipa || f.ipa;
       f.note = glossary[k].note || f.note;
-      // 注入服务端计算的熟练度，供前端显示
       glossary[k].mastery = f.mastery ?? 0;
     });
-    saveUserData();
 
-    // 根据实际数据计算出题原因，不依赖 AI（seen=0 说明本轮之前未出现过）
+    // 持久化用户数据
+    saveUser(userId, userData);
+    words.forEach(w => {
+      const k = w.toLowerCase();
+      saveWord(userId, k, userData.wordFamiliarity[k]);
+    });
+
     const newWords = words.filter(w => {
-      const f = userModel.wordFamiliarity[w.toLowerCase()];
+      const f = userData.wordFamiliarity[w.toLowerCase()];
       return f && f.seen === 0;
     });
     const weakWords = words.filter(w => {
-      const f = userModel.wordFamiliarity[w.toLowerCase()];
+      const f = userData.wordFamiliarity[w.toLowerCase()];
       return f && f.seen > 0 && (f.mastery ?? 0) < 1;
     });
     let reason = "";
@@ -192,7 +175,7 @@ app.post("/api/deal", async (req, res) => {
       targetWords: words,
       sentenceCn: plan.sentenceCn || "",
       glossary,
-      level: userModel.level,
+      level: userData.level,
       reason,
       aiReason: plan.reason || "",
     });
@@ -201,46 +184,53 @@ app.post("/api/deal", async (req, res) => {
   }
 });
 
-// 接收答题数据，纯收集不做判断
+// 接收答题数据
 app.post("/api/stats", (req, res) => {
-  const { words, totalTimeMs, score } = req.body;
+  const userId = getUserId(req);
+  if (!userId) return res.status(400).json({ error: "Missing X-User-Id" });
+
+  const { words, totalTimeMs } = req.body;
   if (!Array.isArray(words) || words.length === 0) {
     return res.status(400).json({ error: "Invalid data" });
   }
+
+  const userData = ensureUser(userId);
 
   const correctCount = words.filter(w => w.correct).length;
   const avgTime = totalTimeMs
     ? totalTimeMs / words.length
     : words.reduce((s, w) => s + (w.timeMs || 0), 0) / words.length;
 
-  // 更新每个词
   words.forEach(w => {
     const k = w.word.toLowerCase();
-    if (!userModel.wordFamiliarity[k]) {
-      userModel.wordFamiliarity[k] = {
+    if (!userData.wordFamiliarity[k]) {
+      userData.wordFamiliarity[k] = {
         seen: 0, correct: 0, wrong: 0, removed: 0, totalTime: 0, mastery: 0,
       };
     }
-    const f = userModel.wordFamiliarity[k];
+    const f = userData.wordFamiliarity[k];
     if (f.mastery == null) f.mastery = 0;
     f.seen++;
     if (w.correct) { f.correct++; f.mastery = Math.min(1, f.mastery + 0.3); }
     else if (w.action === "remove") { f.removed = (f.removed || 0) + 1; }
     else { f.wrong++; f.mastery = Math.max(0, f.mastery - 0.3); }
     if (w.timeMs > 0) f.totalTime += w.timeMs;
+    saveWord(userId, k, f);
   });
 
-  // 总分 = 所有词熟练度总和
-userModel.totalScore = Object.values(userModel.wordFamiliarity).reduce((s, f) => s + (f.mastery || 0), 0);
-userModel.totalSentences++;
-  userModel.recentResults.push({ correct: correctCount, total: words.length, avgTimeMs: avgTime });
-  if (userModel.recentResults.length > 20) userModel.recentResults.shift();
+  const totalScore = Object.values(userData.wordFamiliarity).reduce((s, f) => s + (f.mastery || 0), 0);
+  userData.totalScore = totalScore;
+  userData.totalSentences++;
+  userData.recentResults.push({ correct: correctCount, total: words.length, avgTimeMs: avgTime });
+  if (userData.recentResults.length > 20) userData.recentResults.shift();
 
-  saveUserData();
-  res.json({ level: userModel.level, totalSentences: userModel.totalSentences });
+  saveUser(userId, userData);
+  addResult(userId, correctCount, words.length, avgTime);
+
+  res.json({ level: userData.level, totalSentences: userData.totalSentences });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`文字麻将已启动: http://localhost:3000`);
+  console.log(`文字麻将已启动: http://localhost:${PORT}`);
 });

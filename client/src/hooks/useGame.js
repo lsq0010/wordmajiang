@@ -2,7 +2,17 @@ import { useState, useCallback, useRef } from "react";
 
 const HAND = 12, HMAX = 16;
 
+function getUserId() {
+  let id = localStorage.getItem("wm_uid");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("wm_uid", id);
+  }
+  return id;
+}
+
 export function useGame() {
+  const userId = getUserId();
   const [bank, setBank] = useState([]);
   const [hand, setHand] = useState([]);
   const [sentence, setSentence] = useState([]);
@@ -39,7 +49,7 @@ export function useGame() {
   const fetchModel = useCallback(async () => {
     let savedScore = 0;
     try {
-      const r = await fetch("/api/model");
+      const r = await fetch("/api/model", { headers: { "X-User-Id": userId } });
       const d = await r.json();
       if (d.level) setLevel(d.level);
       if (d.wordFamiliarity) {
@@ -51,7 +61,6 @@ export function useGame() {
           }).sort((a, b) => a.mastery - b.mastery));
       }
       if (typeof d.totalScore === "number") {
-        setScore(d.totalScore);
         savedScore = d.totalScore;
       }
     } catch {}
@@ -63,7 +72,7 @@ export function useGame() {
     const t = logRef.current.reduce((s, a) => s + (a.t || 0), 0);
     const sc = Object.values(localMastery).reduce((s, m) => s + m, 0);
     try {
-      await fetch("/api/stats", { method: "POST", headers: { "Content-Type": "application/json" },
+      await fetch("/api/stats", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": userId },
         body: JSON.stringify({ words: logRef.current.map(a => ({ word: a.w, correct: a.ok, timeMs: a.t || 0, action: a.act || "play", timestamp: a.ts })), totalTimeMs: t, score: sc }) });
     } catch {}
     fetchModel();
@@ -73,7 +82,7 @@ export function useGame() {
     setLoading(true);
     try {
       const sc = Object.values(localMastery).reduce((s, m) => s + m, 0);
-      const r = await fetch("/api/deal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ score: sc }) });
+      const r = await fetch("/api/deal", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": userId }, body: JSON.stringify({ score: sc }) });
       const d = await r.json();
       if (d.error) { setTip("Failed"); setLoading(false); return; }
       const p = [...d.pool], h = [];
