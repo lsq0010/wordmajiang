@@ -43,23 +43,31 @@ async function ensureTables() {
   `);
 }
 
-// Render free tier blocks UDP (DNS), so we resolve via HTTPS to Cloudflare DNS
+// Render free tier blocks UDP (DNS), so we resolve via HTTPS to Cloudflare/Google DNS
 async function resolve4(hostname) {
   try {
+    console.log(`DoH Cloudflare: resolving ${hostname}`);
     const r = await fetch(
       `https://1.1.1.1/dns-query?name=${encodeURIComponent(hostname)}&type=A`,
       { headers: { Accept: "application/dns-json" } }
     );
     const d = await r.json();
+    console.log(`DoH Cloudflare result:`, JSON.stringify(d).slice(0, 200));
     if (d.Answer?.length) return d.Answer[0].data;
-  } catch {}
+  } catch (e) {
+    console.error(`DoH Cloudflare failed: ${e.message}`);
+  }
   try {
+    console.log(`DoH Google: resolving ${hostname}`);
     const r = await fetch(
       `https://8.8.8.8/resolve?name=${encodeURIComponent(hostname)}&type=A`
     );
     const d = await r.json();
+    console.log(`DoH Google result:`, JSON.stringify(d).slice(0, 200));
     if (d.Answer?.length) return d.Answer[0].data;
-  } catch {}
+  } catch (e) {
+    console.error(`DoH Google failed: ${e.message}`);
+  }
   return null;
 }
 
