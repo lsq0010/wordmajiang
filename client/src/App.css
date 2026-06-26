@@ -22,7 +22,7 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
 /* Top Bar */
 .topbar {
   display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
-  padding: max(10px, env(safe-area-inset-top)) 16px 10px 16px; gap: 8px; border-bottom: 1px solid var(--border);
+  padding-top: max(10px, constant(safe-area-inset-top), env(safe-area-inset-top)); padding-right: 16px; padding-bottom: 10px; padding-left: 16px; gap: 8px; border-bottom: 1px solid var(--border);
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; }
 .title { font-size: 18px; font-weight: 600; color: var(--text); }
@@ -116,7 +116,7 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
 /* Bottom Bar */
 .bottombar {
   display: flex; gap: 8px; justify-content: center; padding: 10px 16px;
-  padding-bottom: max(36px, env(safe-area-inset-bottom));
+  padding-bottom: max(36px, constant(safe-area-inset-bottom), env(safe-area-inset-bottom));
   border-top: 1px solid var(--border); background: #1a1a1aee; backdrop-filter: blur(10px);
   flex-shrink: 0;
 }

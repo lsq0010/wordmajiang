@@ -4,6 +4,7 @@ import WebKit
 struct ContentView: View {
     var body: some View {
         WebViewWrapper()
+            .ignoresSafeArea()
     }
 }
 
@@ -15,7 +16,6 @@ struct WebViewWrapper: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = UIColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
         webView.scrollView.backgroundColor = UIColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
-        webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = false
         webView.scrollView.alwaysBounceHorizontal = false
         webView.scrollView.alwaysBounceVertical = false
