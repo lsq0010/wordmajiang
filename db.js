@@ -15,6 +15,7 @@ function getPool() {
 let tablesReady = false;
 async function ensureTables() {
   if (tablesReady) return;
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL not configured");
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,

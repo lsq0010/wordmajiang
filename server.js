@@ -41,8 +41,7 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(400).json({ error: "Username and password required" });
   }
   const u = await findUserByUsername(username.trim());
-  const count = await getUserCount();
-  console.log(`LOGIN: user="${username.trim()}" found=${!!u} totalUsers=${count}`);
+  try { const c = await getUserCount(); console.log(`LOGIN: user="${username.trim()}" found=${!!u} totalUsers=${c}`); } catch {}
   if (!u || !comparePassword(password.trim(), u.passwordHash)) {
     return res.status(401).json({ error: "Invalid username or password" });
   }
@@ -259,8 +258,13 @@ app.post("/api/stats", requireAuth, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-await initDb();
-const startCount = await getUserCount();
+try {
+  await initDb();
+  const startCount = await getUserCount();
+  console.log(`DB ready, users: ${startCount}`);
+} catch (e) {
+  console.warn(`DB init failed: ${e.message} — API will return errors until DATABASE_URL is set`);
+}
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`文字麻将已启动: http://localhost:${PORT} (users: ${startCount})`);
+  console.log(`文字麻将已启动: http://localhost:${PORT}`);
 });
