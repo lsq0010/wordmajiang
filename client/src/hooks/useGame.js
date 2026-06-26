@@ -147,8 +147,10 @@ export function useGame(token) {
       if (np >= tw.length) {
         setFeedback("✓ Done!");
         setFType("ok");
-        setLoading(true);
-        submit().then(() => newRound());
+        setTimeout(() => {
+          setLoading(true);
+          submit().then(() => newRound());
+        }, 1000);
       }
     } else {
       speak(word);
