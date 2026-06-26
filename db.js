@@ -2,36 +2,16 @@ import dns from "dns";
 import pkg from "pg";
 const { Pool } = pkg;
 
-let pgPool;
-async function getPool() {
-  if (!pgPool) {
-    const url = new URL(process.env.DATABASE_URL || "postgresql://localhost");
-    const hostname = url.hostname;
-    let addr = hostname;
-    try {
-      const ips = await dns.resolve4(hostname);
-      if (ips.length) addr = ips[0];
-    } catch {}
-    const cfg = {
-      host: addr,
-      port: parseInt(url.port || "5432"),
-      database: url.pathname.replace("/", "") || "postgres",
-      user: decodeURIComponent(url.username),
-      password: decodeURIComponent(url.password),
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 10000,
-    };
-    console.log(`DB connecting: ${cfg.user}@${cfg.host}:${cfg.port}/${cfg.database}`);
-    pgPool = new Pool(cfg);
-    pgPool.on("error", (e) => console.error("DB pool error:", e.message));
-  }
-  return pgPool;
+let pool;
+
+function getPool() {
+  if (!pool) throw new Error("DB not initialized");
+  return pool;
 }
 
 let tablesReady = false;
 async function ensureTables() {
   if (tablesReady) return;
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL not configured");
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -67,7 +47,27 @@ async function ensureTables() {
   tablesReady = true;
 }
 
-export async function initDb() { await ensureTables(); }
+export async function initDb() {
+  const url = new URL(process.env.DATABASE_URL || "postgresql://localhost");
+  const hostname = url.hostname;
+  let addr = hostname;
+  try {
+    const ips = await dns.resolve4(hostname);
+    if (ips.length) addr = ips[0];
+  } catch {}
+  console.log(`DB connecting: ${url.username}@${addr}:${url.port}/${url.pathname.replace("/", "")}`);
+  pool = new Pool({
+    host: addr,
+    port: parseInt(url.port || "5432"),
+    database: url.pathname.replace("/", "") || "postgres",
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 10000,
+  });
+  pool.on("error", (e) => console.error("DB pool error:", e.message));
+  await ensureTables();
+}
 
 export async function createUser(username, passwordHash) {
   const id = crypto.randomUUID();
