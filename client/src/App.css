@@ -22,7 +22,7 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
 /* Top Bar */
 .topbar {
   display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
-  padding: 10px 16px; gap: 8px; border-bottom: 1px solid var(--border);
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px 16px; gap: 8px; border-bottom: 1px solid var(--border);
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; }
 .title { font-size: 18px; font-weight: 600; color: var(--text); }
