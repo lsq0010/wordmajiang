@@ -43,14 +43,22 @@ async function ensureTables() {
   `);
 }
 
-import dns from "dns";
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
-const dnsResolve4 = dns.promises.resolve4;
-
+// Render free tier blocks UDP (DNS), so we resolve via HTTPS to Cloudflare DNS
 async function resolve4(hostname) {
   try {
-    const ips = await dnsResolve4(hostname);
-    if (ips.length) return ips[0];
+    const r = await fetch(
+      `https://1.1.1.1/dns-query?name=${encodeURIComponent(hostname)}&type=A`,
+      { headers: { Accept: "application/dns-json" } }
+    );
+    const d = await r.json();
+    if (d.Answer?.length) return d.Answer[0].data;
+  } catch {}
+  try {
+    const r = await fetch(
+      `https://8.8.8.8/resolve?name=${encodeURIComponent(hostname)}&type=A`
+    );
+    const d = await r.json();
+    if (d.Answer?.length) return d.Answer[0].data;
   } catch {}
   return null;
 }
