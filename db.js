@@ -13,6 +13,7 @@ function getPool() {
       password: decodeURIComponent(url.password),
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000,
+      family: 4,
     };
     console.log(`DB connecting: ${cfg.user}@${cfg.host}:${cfg.port}/${cfg.database}`);
     pool = new Pool(cfg);
