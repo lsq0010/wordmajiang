@@ -42,7 +42,6 @@ export default function App() {
   };
 
   if (!token) return <AuthForm onAuth={handleAuth} />;
-  if (g.loading) return <div className="loading">Generating board...</div>;
 
   const mc = (c) => c === "m" ? "var(--m-green)" : c === "f" ? "var(--m-blue)" : "var(--m-red)";
 
@@ -63,6 +62,9 @@ export default function App() {
       </div>
 
       <div className="main-area">
+        {g.loading ? (
+          <div className="loading">Generating board...</div>
+        ) : (<>
         {g.sentenceCn && (
           <div className="target">
             <div className="target-cn" onClick={() => setShowCn(!showCn)}>
@@ -98,6 +100,7 @@ export default function App() {
         )}
 
         {g.tip && !g.feedback && <span className="tip">{g.tip}</span>}
+        </>)}
       </div>
 
       {g.showVocab && (
