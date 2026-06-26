@@ -162,3 +162,18 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
 .auth-switch { margin-top: 16px; font-size: 12px; color: var(--muted); }
 .auth-switch span { color: var(--cyan); cursor: pointer; }
 .auth-switch span:hover { text-decoration: underline; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 24px; text-align: center; min-width: 260px;
+}
+.modal-msg { font-size: 15px; margin-bottom: 20px; }
+.modal-btns { display: flex; gap: 10px; justify-content: center; }
+.modal-danger { background: var(--red); color: #fff; border-color: var(--red); }
+.modal-danger:hover { background: #d44; }

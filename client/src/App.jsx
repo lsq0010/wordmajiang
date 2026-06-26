@@ -22,6 +22,7 @@ export default function App() {
   const [showCn, setShowCn] = useState(true);
   const [expandedWord, setExpandedWord] = useState(null);
   const [firstRound, setFirstRound] = useState(true);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   useEffect(() => {
     if (token) g.start();
@@ -131,9 +132,21 @@ export default function App() {
         </div>
       )}
 
+      {logoutOpen && (
+        <div className="modal-overlay" onClick={() => setLogoutOpen(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-msg">确认退出登录？</div>
+            <div className="modal-btns">
+              <button className="btn" onClick={() => setLogoutOpen(false)}>Cancel</button>
+              <button className="btn modal-danger" onClick={() => { clearAuth(); setToken(null); }}>Logout</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bottombar">
         <button className="btn" onClick={() => g.newRound()}>Refresh</button>
-        <button className="btn" onClick={() => { if (confirm("确认退出登录？")) { clearAuth(); setToken(null); } }}>Logout</button>
+        <button className="btn" onClick={() => setLogoutOpen(true)}>Logout</button>
       </div>
     </div>
   );
