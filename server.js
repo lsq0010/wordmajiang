@@ -14,6 +14,7 @@ app.use(express.json());
 app.use(express.static(join(__dirname, "client", "dist")));
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+const round2 = (n) => Math.round(n * 100) / 100;
 
 // ========== 认证路由 ==========
 
@@ -236,9 +237,9 @@ app.post("/api/stats", requireAuth, (req, res) => {
     const f = userData.wordFamiliarity[k];
     if (f.mastery == null) f.mastery = 0;
     f.seen++;
-    if (w.correct) { f.correct++; f.mastery = Math.min(1, f.mastery + 0.3); }
+    if (w.correct) { f.correct++; f.mastery = round2(Math.min(1, f.mastery + 0.3)); }
     else if (w.action === "remove") { f.removed = (f.removed || 0) + 1; }
-    else { f.wrong++; f.mastery = Math.max(0, f.mastery - 0.3); }
+    else { f.wrong++; f.mastery = round2(Math.max(0, f.mastery - 0.3)); }
     if (w.timeMs > 0) f.totalTime += w.timeMs;
     saveWord(userId, k, f);
   });

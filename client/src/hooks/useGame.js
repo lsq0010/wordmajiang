@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 
 const HAND = 12, HMAX = 16;
+const round2 = (n) => Math.round(n * 100) / 100;
 
 export function useGame(token) {
   const [bank, setBank] = useState([]);
@@ -128,7 +129,7 @@ export function useGame(token) {
       speak(word);
       setFeedback(""); setFType("");
       const k = word.toLowerCase();
-      setLocalMastery(prev => ({ ...prev, [k]: Math.min(1, (prev[k] ?? 0) + 0.3) }));
+      setLocalMastery(prev => ({ ...prev, [k]: round2(Math.min(1, (prev[k] ?? 0) + 0.3)) }));
       logRef.current.push({ w: word, ok: true, t: ms, act: "play", ts: now });
 
       setHand(prev => { const c = [...prev]; c.splice(idx, 1); return c; });
@@ -148,8 +149,8 @@ export function useGame(token) {
       const kt = tw[pg].toLowerCase();
       setLocalMastery(prev => {
         const next = { ...prev };
-        next[kw] = Math.max(0, (next[kw] ?? 0) - 0.3);
-        next[kt] = Math.max(0, (next[kt] ?? 0) - 0.3);
+        next[kw] = round2(Math.max(0, (next[kw] ?? 0) - 0.3));
+        next[kt] = round2(Math.max(0, (next[kt] ?? 0) - 0.3));
         return next;
       });
       logRef.current.push({ w: word, ok: false, t: ms, act: "play", ts: now });
