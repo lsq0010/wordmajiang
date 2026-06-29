@@ -122,7 +122,7 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
 .bottombar {
   display: flex; gap: 8px; justify-content: center; padding: 10px 16px;
   padding-bottom: calc(var(--safe-bottom) + 10px);
-  border-top: 1px solid var(--border); background: #1a1a1aee; backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border); background: #1a1a1aee;
   flex-shrink: 0; position: relative;
 }
 .logout-btn { position: absolute; left: 16px; }
