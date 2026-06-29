@@ -29,8 +29,6 @@ export function useGame(token) {
 
   const logRef = useRef([]);
   const t0Ref = useRef(0);
-  const prefetchedRef = useRef(null);
-  const prefetchingRef = useRef(false);
 
   const authHeaders = useCallback(() => ({
     "Content-Type": "application/json",
@@ -89,55 +87,31 @@ export function useGame(token) {
     fetchModel();
   }, [fetchModel, localMastery, authHeaders, checkAuth]);
 
-  const prefetch = useCallback(() => {
-    if (prefetchingRef.current || prefetchedRef.current) return;
-    prefetchingRef.current = true;
-    const score = Object.values(localMastery).reduce((s, m) => s + (m || 0), 0);
-    const headers = authHeaders();
-    fetch("/api/deal", { method: "POST", headers, body: JSON.stringify({ score }) })
-      .then(r => r.json())
-      .then(d => { if (!d.error) prefetchedRef.current = d; })
-      .catch(() => {})
-      .finally(() => { prefetchingRef.current = false; });
-  }, [authHeaders, localMastery]);
-
-  const applyRoundData = useCallback((d) => {
-    const p = [...d.pool], h = [];
-    while (h.length < HAND && p.length) h.push(p.pop());
-    setBank(p); setHand(h); setTargetWords(d.targetWords);
-    setSentenceCn(d.sentenceCn || "");
-    setReason(d.reason || "");
-    const gl = d.glossary || {};
-    setGlossary(gl);
-    const lm = {};
-    Object.entries(gl).forEach(([k, v]) => { lm[k.toLowerCase()] = v.mastery ?? 0; });
-    setLocalMastery(lm);
-    if (d.level) { setLevel(d.level); try { localStorage.setItem("wm_level", d.level); } catch {} }
-    setSentence([]); setProgress(0);
-    logRef.current = [];
-    setFeedback(""); setFType(""); setTip("Tap a word");
-  }, []);
-
   const newRound = useCallback(async () => {
-    let d = prefetchedRef.current;
-    prefetchedRef.current = null;
-    if (d) {
-      applyRoundData(d);
-      prefetch();
-      return;
-    }
     setLoading(true);
     try {
       const sc = Object.values(localMastery).reduce((s, m) => s + m, 0);
       const r = await fetch("/api/deal", { method: "POST", headers: authHeaders(), body: JSON.stringify({ score: sc }) });
       checkAuth(r);
-      d = await r.json();
+      const d = await r.json();
       if (d.error) { setTip("Failed"); setLoading(false); return; }
-      applyRoundData(d);
+      const p = [...d.pool], h = [];
+      while (h.length < HAND && p.length) h.push(p.pop());
+      setBank(p); setHand(h); setTargetWords(d.targetWords);
+      setSentenceCn(d.sentenceCn || "");
+      setReason(d.reason || "");
+      const gl = d.glossary || {};
+      setGlossary(gl);
+      const lm = {};
+      Object.entries(gl).forEach(([k, v]) => { lm[k.toLowerCase()] = v.mastery ?? 0; });
+      setLocalMastery(lm);
+      if (d.level) { setLevel(d.level); try { localStorage.setItem("wm_level", d.level); } catch {} }
+      setSentence([]); setProgress(0);
+      logRef.current = [];
+      setFeedback(""); setFType(""); setTip("Tap a word");
     } catch { setTip("Network error"); }
     setLoading(false);
-    prefetch();
-  }, [authHeaders, checkAuth, localMastery, applyRoundData, prefetch]);
+  }, [authHeaders, checkAuth]);
 
   const start = useCallback(async () => {
     setHand([]); setSentence([]); setTargetWords([]);
