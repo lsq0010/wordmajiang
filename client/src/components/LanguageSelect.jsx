@@ -3,8 +3,8 @@ import { t } from "../i18n";
 
 const LANGUAGES = [
   // 东亚 East Asia
-  { code: "zh-CN", name: "中文 (简体)" },
-  { code: "zh-TW", name: "中文 (繁體)" },
+  { code: "zh-CN", name: "简体中文" },
+  { code: "zh-TW", name: "繁體中文" },
   { code: "ja-JP", name: "日本語" },
   { code: "ko-KR", name: "한국어" },
   { code: "mn-MN", name: "Монгол" },
@@ -50,7 +50,7 @@ const LANGUAGES = [
   { code: "lv-LV", name: "Latviešu" },
   { code: "et-EE", name: "Eesti" },
   // 西欧 Western Europe
-  { code: "en-GB", name: "English (UK)" },
+  { code: "en-GB", name: "English" },
   { code: "fr-FR", name: "Français" },
   { code: "de-DE", name: "Deutsch" },
   { code: "nl-NL", name: "Nederlands" },
@@ -94,13 +94,13 @@ const LANGUAGES = [
   { code: "ny-MW", name: "Chichewa" },
   { code: "mg-MG", name: "Malagasy" },
   // 北美 / 拉美 Americas
-  { code: "en-US", name: "English (US)" },
-  { code: "es-MX", name: "Español (México)" },
-  { code: "pt-BR", name: "Português (Brasil)" },
-  { code: "fr-CA", name: "Français (Canada)" },
+  { code: "en-US", name: "English" },
+  { code: "es-MX", name: "Español mexicano" },
+  { code: "pt-BR", name: "Português brasileiro" },
+  { code: "fr-CA", name: "Français canadien" },
   { code: "qu-PE", name: "Runasimi" },
   // 大洋洲 Oceania
-  { code: "en-AU", name: "English (Australia)" },
+  { code: "en-AU", name: "English" },
   { code: "mi-NZ", name: "Te Reo Māori" },
   { code: "sm-WS", name: "Gagana Samoa" },
   { code: "to-TO", name: "Lea Faka-Tonga" },
