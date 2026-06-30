@@ -5,7 +5,7 @@ import WordTile from "./components/WordTile";
 import HandwriteArea from "./components/HandwriteArea";
 import AuthForm from "./components/AuthForm";
 import LogoutModal from "./components/LogoutModal";
-import LanguageSelect, { langName } from "./components/LanguageSelect";
+import LanguageSelect, { LANGUAGES, langName } from "./components/LanguageSelect";
 
 function getToken() {
   try { return localStorage.getItem("wm_token"); } catch { return null; }
@@ -32,7 +32,6 @@ export default function App() {
   const [expandedWord, setExpandedWord] = useState(null);
   const [showHandwrite, setShowHandwrite] = useState(false);
   const [firstRound, setFirstRound] = useState(true);
-  const [langSel, setLangSel] = useState(null); // null | "native" | "target"
   const [showPreAuthLang, setShowPreAuthLang] = useState(() => {
     try { return !localStorage.getItem("wm_langSet"); } catch { return true; }
   });
@@ -93,39 +92,35 @@ export default function App() {
 
   return (
     <div className="app">
-      {langSel && (
-        <LanguageSelect
-          mode={langSel}
-          nativeLang={g.nativeLang}
-          targetLang={g.targetLang}
-          uiLang={uiLang}
-          onConfirm={(val) => {
-            if (langSel === "native") {
-              g.setLanguages(val, g.targetLang);
-              g.start(g.targetLang, val);
-            } else {
-              g.setLanguages(g.nativeLang, val);
-              g.start(val, g.nativeLang);
-            }
-            setLangSel(null);
-          }}
-          onCancel={() => setLangSel(null)}
-        />
-      )}
-
       <div className="topbar">
         <div className="topbar-left">
           <span className="title">{tr("appTitle")}</span>
           <span className="lv">{tr("level")}{g.level}</span>
         </div>
         <div className="topbar-right">
-          <span className="lang-pill" onClick={() => setLangSel("native")}>
-            <b>{langName(g.nativeLang)}</b>
+          <span className="lang-pill">
             <small>{tr("nativeLang")}</small>
+            <select className="lang-drop" value={g.nativeLang} onChange={e => {
+              const val = e.target.value;
+              g.setLanguages(val, g.targetLang);
+              setTimeout(() => g.start(g.targetLang, val), 0);
+            }}>
+              {LANGUAGES.map(l => (
+                <option key={l.code} value={l.code}>{l.name}</option>
+              ))}
+            </select>
           </span>
-          <span className="lang-pill lang-pill-tgt" onClick={() => setLangSel("target")}>
-            <b>{langName(g.targetLang)}</b>
+          <span className="lang-pill lang-pill-tgt">
             <small>{tr("targetLang")}</small>
+            <select className="lang-drop" value={g.targetLang} onChange={e => {
+              const val = e.target.value;
+              g.setLanguages(g.nativeLang, val);
+              setTimeout(() => g.start(val, g.nativeLang), 0);
+            }}>
+              {LANGUAGES.map(l => (
+                <option key={l.code} value={l.code}>{l.name}</option>
+              ))}
+            </select>
           </span>
           <div className="stat"><b>{g.score.toFixed(1)}</b><span>{tr("score")}</span></div>
           <div className="stat" onClick={() => g.setShowVocab(!g.showVocab)} style={{cursor:"pointer"}}>
