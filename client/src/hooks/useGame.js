@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { t } from "../i18n";
 
 const HAND = 12, HMAX = 16;
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -27,9 +28,19 @@ export function useGame(token) {
   const [sentenceType, setSentenceType] = useState("");
   const [showVocab, setShowVocab] = useState(false);
   const [authError, setAuthError] = useState(false);
+  const [nativeLang, setNativeLang] = useState(() => {
+    try { return localStorage.getItem("wm_nativeLang") || "zh-CN"; } catch { return "zh-CN"; }
+  });
+  const [targetLang, setTargetLang] = useState(() => {
+    try { return localStorage.getItem("wm_targetLang") || "en-US"; } catch { return "en-US"; }
+  });
 
   const logRef = useRef([]);
   const t0Ref = useRef(0);
+  const targetLangRef = useRef(targetLang);
+  targetLangRef.current = targetLang;
+  const nativeLangRef = useRef(nativeLang);
+  nativeLangRef.current = nativeLang;
 
   const authHeaders = useCallback(() => ({
     "Content-Type": "application/json",
@@ -41,23 +52,28 @@ export function useGame(token) {
   }, []);
 
   const speak = useCallback((w) => {
+    const lang = targetLangRef.current || "en-US";
     setTimeout(() => {
       try {
         speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(w);
-        u.lang = "en-US"; u.rate = 0.85;
+        u.lang = lang; u.rate = 0.85;
         speechSynthesis.speak(u);
       } catch {}
     }, 0);
-  }, []);
+  }, [targetLang]);
 
-  const fetchModel = useCallback(async () => {
+  const fetchModel = useCallback(async (tgtLang, natLang) => {
+    const tgt = tgtLang || targetLangRef.current;
+    const nat = natLang || nativeLangRef.current;
     let savedScore = 0;
     try {
-      const r = await fetch("/api/model", { headers: authHeaders() });
+      const r = await fetch(`/api/model?targetLang=${encodeURIComponent(tgt)}&nativeLang=${encodeURIComponent(nat)}`, { headers: authHeaders() });
       checkAuth(r);
       const d = await r.json();
       if (d.level) { setLevel(d.level); try { localStorage.setItem("wm_level", d.level); } catch {} }
+      if (d.nativeLang) { setNativeLang(d.nativeLang); try { localStorage.setItem("wm_nativeLang", d.nativeLang); } catch {} }
+      if (d.targetLang) { setTargetLang(d.targetLang); try { localStorage.setItem("wm_targetLang", d.targetLang); } catch {} }
       if (d.wordFamiliarity) {
         const v = Object.entries(d.wordFamiliarity)
           .map(([w, f]) => {
@@ -82,20 +98,22 @@ export function useGame(token) {
     try {
       const r = await fetch("/api/stats", { method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ words: logRef.current.map(a => ({ word: a.w, correct: a.ok, timeMs: a.t || 0, action: a.act || "play", timestamp: a.ts })), totalTimeMs: t, score: sc }) });
+        body: JSON.stringify({ words: logRef.current.map(a => ({ word: a.w, correct: a.ok, timeMs: a.t || 0, action: a.act || "play", timestamp: a.ts })), totalTimeMs: t, score: sc, targetLang: targetLangRef.current, nativeLang: nativeLangRef.current }) });
       checkAuth(r);
     } catch {}
     fetchModel();
   }, [fetchModel, localMastery, authHeaders, checkAuth]);
 
-  const newRound = useCallback(async () => {
+  const newRound = useCallback(async (tgtLang, natLang) => {
+    const tgt = tgtLang || targetLangRef.current;
+    const nat = natLang || nativeLangRef.current;
     setLoading(true);
     try {
       const sc = Object.values(localMastery).reduce((s, m) => s + m, 0);
-      const r = await fetch("/api/deal", { method: "POST", headers: authHeaders(), body: JSON.stringify({ score: sc }) });
+      const r = await fetch("/api/deal", { method: "POST", headers: authHeaders(), body: JSON.stringify({ score: sc, targetLang: tgt, nativeLang: nat }) });
       checkAuth(r);
       const d = await r.json();
-      if (d.error) { setTip("Failed"); setLoading(false); return; }
+      if (d.error) { setTip(t(nativeLangRef.current, "failed")); setLoading(false); return; }
       const p = [...d.pool], h = [];
       while (h.length < HAND && p.length) h.push(p.pop());
       setBank(p); setHand(h); setTargetWords(d.targetWords);
@@ -110,17 +128,31 @@ export function useGame(token) {
       if (d.level) { setLevel(d.level); try { localStorage.setItem("wm_level", d.level); } catch {} }
       setSentence([]); setProgress(0);
       logRef.current = [];
-      setFeedback(""); setFType(""); setTip("Tap a word");
-    } catch { setTip("Network error"); }
+      setFeedback(""); setFType(""); setTip(t(nativeLangRef.current, "tapWord"));
+    } catch { setTip(t(nativeLangRef.current, "networkError")); }
     setLoading(false);
   }, [authHeaders, checkAuth]);
 
-  const start = useCallback(async () => {
+  const setLanguages = useCallback(async (nat, tgt) => {
+    setNativeLang(nat);
+    setTargetLang(tgt);
+    try { localStorage.setItem("wm_nativeLang", nat); } catch {}
+    try { localStorage.setItem("wm_targetLang", tgt); } catch {}
+    try {
+      await fetch("/api/preferences", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ nativeLang: nat, targetLang: tgt }),
+      });
+    } catch {}
+  }, [authHeaders]);
+
+  const start = useCallback(async (tgtLang, natLang) => {
     setHand([]); setSentence([]); setTargetWords([]);
     setSentenceCn(""); setReason(""); setGlossary({}); setLocalMastery({}); logRef.current = [];
     setFeedback(""); setFType(""); setTip("");
-    await fetchModel();
-    await newRound();
+    await fetchModel(tgtLang, natLang);
+    await newRound(tgtLang, natLang);
   }, [fetchModel, newRound]);
 
   function tap(word, idx) {
@@ -147,7 +179,7 @@ export function useGame(token) {
       setProgress(np);
 
       if (np >= tw.length) {
-        setFeedback("✓ Done!");
+        setFeedback(t(nativeLangRef.current, "done"));
         setFType("ok");
         setTimeout(() => {
           setLoading(true);
@@ -166,7 +198,7 @@ export function useGame(token) {
       });
       logRef.current.push({ w: word, ok: false, t: ms, act: "play", ts: now });
       logRef.current.push({ w: tw[pg], ok: false, t: ms, act: "missed", ts: now });
-      setFeedback("✗ Wrong");
+      setFeedback(t(nativeLangRef.current, "wrong"));
       setFType("bad");
     }
   }
@@ -194,5 +226,6 @@ export function useGame(token) {
     vocab, showVocab, setShowVocab,
     start, newRound, tap, speak, getGlossary,
     sentenceType, sentenceMastered, authError,
+    nativeLang, targetLang, setLanguages,
   };
 }

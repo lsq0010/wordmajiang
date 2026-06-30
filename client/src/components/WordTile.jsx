@@ -4,10 +4,7 @@ export default function WordTile({ word, glossary, isSentence, onTap }) {
   const mc = m != null ? m >= 1 ? "var(--m-green)" : m >= 0.5 ? "var(--m-blue)" : "var(--m-red)" : null;
   return (
     <div className={`tile ${isSentence ? "st" : "pt"}`} onClick={onTap}>
-      <div className="t-word">
-        {word}
-        <span className="t-spk">🔈</span>
-      </div>
+      <div className="t-word">{word}</div>
       {g.ipa && <div className="t-ipa">{g.ipa}</div>}
       {g.cn && <div className="t-cn">{g.cn}</div>}
       {g.note && <div className="t-note">{g.note}</div>}

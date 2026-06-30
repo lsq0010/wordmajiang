@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { t } from "../i18n";
 
 function loadCreds() {
   try {
@@ -6,7 +7,8 @@ function loadCreds() {
   } catch { return {}; }
 }
 
-export default function AuthForm({ onAuth }) {
+export default function AuthForm({ onAuth, uiLang }) {
+  const lang = uiLang || "zh-CN";
   const saved = loadCreds();
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState(saved.username || "");
@@ -19,17 +21,19 @@ export default function AuthForm({ onAuth }) {
     setError("");
     setLoading(true);
     try {
+      const nativeLang = localStorage.getItem("wm_nativeLang") || "zh-CN";
+      const targetLang = localStorage.getItem("wm_targetLang") || "en-US";
       const r = await fetch(`/api/auth/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
+        body: JSON.stringify({ username: username.trim(), password: password.trim(), nativeLang, targetLang }),
       });
       const d = await r.json();
-      if (!r.ok) { setError(d.error || "Failed"); return; }
+      if (!r.ok) { setError(t(lang, d.error) || t(lang, "failed")); return; }
       try { localStorage.setItem("wm_creds", JSON.stringify({ username: username.trim(), password })); } catch {}
       onAuth(d.token, d.user);
     } catch {
-      setError("Network error");
+      setError(t(lang, "errNetwork"));
     } finally {
       setLoading(false);
     }
@@ -40,32 +44,32 @@ export default function AuthForm({ onAuth }) {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1 className="auth-title">文字麻将</h1>
-        <p className="auth-sub">Vocab Builder</p>
+        <h1 className="auth-title">{t(lang, "appTitle")}</h1>
+        <p className="auth-sub">{t(lang, "appSub")}</p>
         <form className="auth-form" onSubmit={submit}>
           <input
             className="auth-input"
-            placeholder="Username"
+            placeholder={t(lang, "username")}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
           <input
             className="auth-input"
             type="password"
-            placeholder="Password"
+            placeholder={t(lang, "password")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           {error && <div className="auth-error">{error}</div>}
           <button className="auth-btn" disabled={loading} type="submit">
-            {loading ? "Loading..." : isRegister ? "Register" : "Login"}
+            {loading ? t(lang, "loadingBtn") : isRegister ? t(lang, "register") : t(lang, "login")}
           </button>
         </form>
         <div className="auth-switch">
           {isRegister ? (
-            <>Have an account? <span onClick={() => { setMode("login"); setError(""); }}>Login</span></>
+            <>{t(lang, "haveAccount")} <span onClick={() => { setMode("login"); setError(""); }}>{t(lang, "login")}</span></>
           ) : (
-            <>No account? <span onClick={() => { setMode("register"); setError(""); }}>Register</span></>
+            <>{t(lang, "noAccount")} <span onClick={() => { setMode("register"); setError(""); }}>{t(lang, "register")}</span></>
           )}
         </div>
       </div>
