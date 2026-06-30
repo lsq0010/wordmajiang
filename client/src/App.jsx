@@ -32,7 +32,7 @@ export default function App() {
   const [expandedWord, setExpandedWord] = useState(null);
   const [showHandwrite, setShowHandwrite] = useState(false);
   const [firstRound, setFirstRound] = useState(true);
-  const [showLangSelect, setShowLangSelect] = useState(false);
+  const [langSel, setLangSel] = useState(null); // null | "native" | "target"
   const [showPreAuthLang, setShowPreAuthLang] = useState(() => {
     try { return !localStorage.getItem("wm_langSet"); } catch { return true; }
   });
@@ -93,13 +93,23 @@ export default function App() {
 
   return (
     <div className="app">
-      {showLangSelect && (
+      {langSel && (
         <LanguageSelect
+          mode={langSel}
           nativeLang={g.nativeLang}
           targetLang={g.targetLang}
           uiLang={uiLang}
-          onConfirm={(nat, tgt) => { g.setLanguages(nat, tgt); setShowLangSelect(false); g.start(tgt, nat); }}
-          onCancel={() => setShowLangSelect(false)}
+          onConfirm={(val) => {
+            if (langSel === "native") {
+              g.setLanguages(val, g.targetLang);
+              g.start(g.targetLang, val);
+            } else {
+              g.setLanguages(g.nativeLang, val);
+              g.start(val, g.nativeLang);
+            }
+            setLangSel(null);
+          }}
+          onCancel={() => setLangSel(null)}
         />
       )}
 
@@ -109,11 +119,13 @@ export default function App() {
           <span className="lv">{tr("level")}{g.level}</span>
         </div>
         <div className="topbar-right">
-          <span className="lang-pill" onClick={() => setShowLangSelect(true)} title={tr("nativeLang")}>
-            {langName(g.nativeLang)}
+          <span className="lang-pill" onClick={() => setLangSel("native")}>
+            <b>{langName(g.nativeLang)}</b>
+            <small>{tr("nativeLang")}</small>
           </span>
-          <span className="lang-pill lang-pill-tgt" onClick={() => setShowLangSelect(true)} title={tr("targetLang")}>
-            {langName(g.targetLang)}
+          <span className="lang-pill lang-pill-tgt" onClick={() => setLangSel("target")}>
+            <b>{langName(g.targetLang)}</b>
+            <small>{tr("targetLang")}</small>
           </span>
           <div className="stat"><b>{g.score.toFixed(1)}</b><span>{tr("score")}</span></div>
           <div className="stat" onClick={() => g.setShowVocab(!g.showVocab)} style={{cursor:"pointer"}}>

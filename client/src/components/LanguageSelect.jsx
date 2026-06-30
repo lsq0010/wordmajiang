@@ -113,32 +113,18 @@ function langName(code) {
 
 export { langName, LANGUAGES };
 
-export default function LanguageSelect({ nativeLang, targetLang, onConfirm, onCancel, uiLang }) {
-  const [nat, setNat] = useState(nativeLang || "zh-CN");
-  const [tgt, setTgt] = useState(targetLang || "en-US");
-  const [search, setSearch] = useState("");
-
-  const filtered = search
-    ? LANGUAGES.filter(l => l.name.toLowerCase().includes(search.toLowerCase()) || l.code.includes(search))
-    : LANGUAGES;
+export default function LanguageSelect({ mode, nativeLang, targetLang, onConfirm, onCancel, uiLang }) {
+  const val = mode === "native" ? (nativeLang || "zh-CN") : (targetLang || "en-US");
+  const [sel, setSel] = useState(val);
+  const label = mode === "native" ? t(uiLang, "nativeLang") : t(uiLang, "targetLang");
 
   return (
     <div className="lang-select-overlay" onClick={onCancel || (() => {})}>
       <div className="lang-select-card" onClick={e => e.stopPropagation()}>
-        <h2 className="lang-select-title">{t(uiLang, "selectLang")}</h2>
+        <h2 className="lang-select-title">{label}</h2>
 
         <div className="lang-field">
-          <label className="lang-label">{t(uiLang, "nativeLang")}</label>
-          <select className="lang-select" value={nat} onChange={e => setNat(e.target.value)}>
-            {LANGUAGES.map(l => (
-              <option key={l.code} value={l.code}>{l.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="lang-field">
-          <label className="lang-label">{t(uiLang, "targetLang")}</label>
-          <select className="lang-select" value={tgt} onChange={e => setTgt(e.target.value)}>
+          <select className="lang-select" value={sel} onChange={e => setSel(e.target.value)}>
             {LANGUAGES.map(l => (
               <option key={l.code} value={l.code}>{l.name}</option>
             ))}
@@ -149,7 +135,7 @@ export default function LanguageSelect({ nativeLang, targetLang, onConfirm, onCa
           {onCancel && (
             <button className="btn" onClick={onCancel}>{t(uiLang, "cancel")}</button>
           )}
-          <button className="btn lang-confirm" onClick={() => onConfirm(nat, tgt)}>
+          <button className="btn lang-confirm" onClick={() => onConfirm(sel)}>
             {t(uiLang, "confirm")}
           </button>
         </div>
