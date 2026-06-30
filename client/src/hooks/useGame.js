@@ -24,6 +24,7 @@ export function useGame(token) {
     try { const d = JSON.parse(localStorage.getItem("wm_vocab") || "[]"); return Array.isArray(d) ? d : []; }
     catch { return []; }
   });
+  const [sentenceType, setSentenceType] = useState("");
   const [showVocab, setShowVocab] = useState(false);
   const [authError, setAuthError] = useState(false);
 
@@ -100,6 +101,7 @@ export function useGame(token) {
       setBank(p); setHand(h); setTargetWords(d.targetWords);
       setSentenceCn(d.sentenceCn || "");
       setReason(d.reason || "");
+      setSentenceType(d.sentenceType || "");
       const gl = d.glossary || {};
       setGlossary(gl);
       const lm = {};
@@ -180,12 +182,17 @@ export function useGame(token) {
     return s + (lm != null ? lm : (v.mastery || 0));
   }, 0);
 
+  const sentenceMastered = targetWords.filter(w => {
+    const m = localMastery[w.toLowerCase()];
+    return m != null && m >= 1;
+  }).length;
+
   return {
     bank, hand, sentence, targetWords, sentenceCn, reason, glossary,
     score, progress, level, loading,
     feedback, fType, tip,
     vocab, showVocab, setShowVocab,
     start, newRound, tap, speak, getGlossary,
-    authError,
+    sentenceType, sentenceMastered, authError,
   };
 }

@@ -78,7 +78,12 @@ html, body, #root { height: 100%; overflow: hidden; width: 100%; max-width: 100v
 .muted { color: var(--muted2); font-size: 13px; padding: 16px 0; }
 
 /* Reason */
-.reason { font-size: 10px; color: var(--muted); text-align: left; padding: 0 0 6px 0; }
+.reason { font-size: 10px; color: var(--muted); text-align: left; padding: 0 0 6px 0; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+
+/* Sentence type badge */
+.stag { font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; flex-shrink: 0; }
+.stag-consolidate { background: #6af1; color: var(--m-blue); }
+.stag-new { background: #5a81; color: var(--m-green); }
 
 /* Feedback */
 .feedback { font-size: 13px; text-align: center; min-height: 18px; }

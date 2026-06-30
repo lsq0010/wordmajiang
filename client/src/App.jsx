@@ -91,6 +91,7 @@ export default function App() {
 
         <div className="section">
           <div className="reason">
+            {g.sentenceType && <span className={`stag ${g.sentenceType === '巩固' ? 'stag-consolidate' : 'stag-new'}`}>{g.sentenceType} {g.sentenceMastered}/{g.targetWords.length}</span>}
             {g.reason ? '• ' + g.reason : ''}
             {g.reason && g.sentenceCn ? ' · ' : ''}
             <span onClick={() => setShowCn(!showCn)} style={{cursor:"pointer"}}>
