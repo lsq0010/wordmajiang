@@ -1,0 +1,9 @@
+{
+  "appId": "com.wordmajiang.app",
+  "appName": "WordMemo",
+  "webDir": "dist",
+  "server": {
+    "url": "http://192.3.13.61:3000",
+    "cleartext": true
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WordMemo</string>
+    <string name="title_activity_main">WordMemo</string>
+    <string name="package_name">com.wordmajiang.app</string>
+    <string name="custom_url_scheme">com.wordmajiang.app</string>
+</resources>
